@@ -8,3 +8,6 @@ Project Goals:
 + No C environment, ESALP will be written in Rust and Assembler
 + Flexibility
 + More to come
+
+##Licensing
+This source code is licensed under the MIT license. See LICENSE for more details.
