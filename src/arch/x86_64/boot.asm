@@ -30,6 +30,9 @@ start:
 	call check_cpuid
 	call check_long_mode
 
+	call set_up_page_tables
+	call enable_paging
+
 	;Print 'OK' to the screen
 	mov dword [0xb8000], 0x2f4b2f4f
 
@@ -47,6 +50,55 @@ start:
 .loop:
 	hlt
 	jmp .loop
+
+set_up_page_tables:
+	; map first P4 entry to P3 table
+	mov eax, p3_table
+	or eax, 0b11 ; present + writable
+	mov [p4_table], eax
+
+	; map first P3 entry to P2 table
+	mov eax, p2_table
+	or eax, 0b11 ; present + writable
+	mov [p3_table], eax
+
+	; map each P2 entry to a huge 2MiB page
+	mov ecx, 0x0       ; counter variable
+
+.map_p2_table:
+	mov eax, 0x200000  ; 2MiB
+	mul ecx            ; start address of ecx-th page
+	or eax, 0b10000011 ; present + writable + huge
+	mov [p2_table + ecx * 8], eax ; map ecx-th entry
+
+	inc ecx            ; increase counter
+	cmp ecx, 512       ; if counter == 512, the whole P2 table is mapped
+	jne .map_p2_table  ; else map the next entry
+
+	ret
+
+enable_paging:
+	; load P4 to cr3 register (cpu uses this to access the P4 table)
+	mov eax, p4_table
+	mov cr3, eax
+
+	; enable PAE-flag in cr4 (Physical Address Extension)
+	mov eax, cr4
+	or eax, 1 << 5
+	mov cr4, eax
+
+	; set the long mode bit in the EFER MSR (model specific register)
+	mov ecx, 0xC0000080
+	rdmsr
+	or eax, 1 << 8
+	wrmsr
+
+	; enable paging in the cr0 register
+	mov eax, cr0
+	or eax, 1 << 31
+	mov cr0, eax
+
+	ret
 
 check_multiboot:
 	cmp eax, 0x36d76289
@@ -81,7 +133,7 @@ check_cpuid:
 	cmp eax, ecx
 	je .no_cpuid
 	ret
-.nocpuid:
+.no_cpuid:
 	mov al, "1"
 	jmp error
 
@@ -112,6 +164,17 @@ error:
 	hlt
 
 
+section .bss
+; This reserves space for an empty page table to be loaded at runtime
+; in set_up_tables we will make the table valid and set it up to map
+; the first gigabyte of our kernel
+align 4096
+p4_table:
+    resb 4096
+p3_table:
+    resb 4096
+p2_table:
+    resb 4096
 ; The multiboot standard does not define the value of the stack pointer register
 ; (esp) and it is up to the kernel to provide a stack. This allocates room for a
 ; small stack by creating a symbol at the bottom of it, then allocating 64
@@ -122,7 +185,6 @@ error:
 ; System V ABI standard and de-facto extensions. The compiler will assume the
 ; stack is properly aligned and failure to align the stack will result in
 ; undefined behavior.
-section .bss
 align 16
 stack_bottom:
 	resb 64
