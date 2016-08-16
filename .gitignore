@@ -1,0 +1,14 @@
+#editor files
+*.swp
+
+#compiled files
+*.bin
+*.o
+*.so
+*.rlib
+
+#cargo
+/target/
+
+#build
+/build/
