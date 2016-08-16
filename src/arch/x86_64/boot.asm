@@ -7,6 +7,7 @@
 ; except according to those terms.
 
 global start
+extern long_mode_start
 
 section .text
 bits 32 ;We are still in protected mode
@@ -33,23 +34,18 @@ start:
 	call set_up_page_tables
 	call enable_paging
 
-	;Print 'OK' to the screen
-	mov dword [0xb8000], 0x2f4b2f4f
+	; Load the 64-bit GDT
+	lgdt [gdt64.pointer]
 
-	; If the system has nothing more to do, put the computer into an
-	; infinite loop. To do that:
-	; 1) Disable interrupts with cli (clear interrupt enable in eflags).
-	;    They are already disabled by the bootloader, so this is not needed.
-	;    Mind that you might later enable interrupts and return from
-	;    kernel_main (which is sort of nonsensical to do).
-	; 2) Wait for the next interrupt to arrive with hlt (halt instruction).
-	;    Since they are disabled, this will lock up the computer.
-	; 3) Jump to the hlt instruction if it ever wakes up due to a
-	;    non-maskable interrupt occurring or due to system management mode.
-	cli
-.loop:
-	hlt
-	jmp .loop
+    ; update selectors
+    mov ax, gdt64.data ; data offset
+    mov ss, ax
+    mov ds, ax
+    mov es, ax
+
+	; Load the code selector with a far jmp
+	; From now on instructions are 64 bits and this file is invalid
+	jmp gdt64.code:long_mode_start ; -> !
 
 set_up_page_tables:
 	; map first P4 entry to P3 table
@@ -189,3 +185,14 @@ align 16
 stack_bottom:
 	resb 64
 stack_top:
+
+section .rodata
+gdt64:
+	dq 0 ; zero entry
+.code equ $ - gdt64
+	dq (1<<44) | (1<<47) | (1<<41) | (1<<43) | (1<<53) ; code segment
+.data equ $ - gdt64
+	dq (1<<44) | (1<<47) | (1<<41) ; data segment
+.pointer:
+	dw $ - gdt64 - 1
+	dq gdt64
