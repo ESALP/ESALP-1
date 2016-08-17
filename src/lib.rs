@@ -14,6 +14,7 @@
 extern crate rlibc;
 extern crate spin;
 
+#[macro_use]
 mod vga_buffer;
 
 extern {
