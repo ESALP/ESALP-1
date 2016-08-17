@@ -12,6 +12,7 @@
 #![no_std]
 
 extern crate rlibc;
+extern crate spin;
 
 mod vga_buffer;
 
@@ -21,19 +22,9 @@ extern {
 
 #[no_mangle]
 pub extern fn rust_main() {
-	let mut message = [0x3f;34];
-	{
-		let hello = b"\x02\x01 Hello Rust! \x01\x02";
-
-		for (i,char_byte) in hello.into_iter().enumerate() {
-			message[i * 2] = *char_byte;
-		}
-	}
-	// write msg to the center of the text buffer
-	let buffer_ptr = (0xb8000 + 1988) as *mut _;
-	unsafe { *buffer_ptr = message };
-
-	vga_buffer::test_print();
+	use core::fmt::Write;
+	vga_buffer::WRITER.lock().write_str("Hello again");
+	write!(vga_buffer::WRITER.lock(), ", some numbers: {} {}", 42, 1.337);
 }
 
 #[allow(non_snake_case)]

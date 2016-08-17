@@ -8,20 +8,38 @@
  * except according to those terms.
  */
 use core::ptr::Unique;
+use spin::Mutex;
 
 const BUFFER_HEIGHT: usize = 25;
 const BUFFER_WIDTH: usize = 80;
 
-pub fn test_print() {
-	let mut writer = Writer {
-		column_position: 0,
-		color_code: ColorCode::new(Color::LightCyan,Color::Black),
-		buffer: unsafe { Unique::new(0xb8000 as *mut _) },
-	};
-	for &byte in b"Hello Writer!".into_iter() {
-		writer.write_byte(byte);
-	}
+pub static WRITER: Mutex<Writer> = Mutex::new(Writer {
+	column_position: 0,
+	color_code: ColorCode::new(Color::Pink, Color::Black),
+	buffer: unsafe { Unique::new( 0xb8000 as *mut _ ) },
+});
+
+#[allow(dead_code)]
+#[repr(u8)]
+pub enum Color {
+	Black      = 0x0,
+	Blue       = 0x1,
+	Green      = 0x2,
+	Cyan       = 0x3,
+	Red        = 0x4,
+	Magenta    = 0x5,
+	Brown      = 0x6,
+	LightGray  = 0x7,
+	DarkGray   = 0x8,
+	LightBlue  = 0x9,
+	LightGreen = 0xa,
+	LightCyan  = 0xb,
+	LightRed   = 0xc,
+	Pink       = 0xd,
+	Yellow     = 0xe,
+	White      = 0xf,
 }
+
 pub struct Writer {
 	column_position: usize,
 	color_code: ColorCode,
@@ -49,34 +67,41 @@ impl Writer {
 		}
 	}
 
+	pub fn write_str(&mut self, s: &str) {
+		for byte in s.bytes() {
+			self.write_byte(byte);
+		}
+	}
+
 	fn buffer(&mut self) -> &mut Buffer {
 		unsafe { self.buffer.get_mut() }
 	}
 
 	fn new_line(&mut self) {
-		// TODO
+		for row in 0..(BUFFER_HEIGHT-1) {
+			let buffer = self.buffer();
+			buffer.chars[row] = buffer.chars[row+1]
+		}
+		self.clear_row(BUFFER_HEIGHT-1);
+		self.column_position = 0;
+	}
+
+	fn clear_row(&mut self, row: usize) {
+		let blank = ScreenChar {
+			ascii_character: b' ',
+			color_code: self.color_code,
+		};
+		self.buffer().chars[row] = [blank; BUFFER_WIDTH];
 	}
 }
 
-#[allow(dead_code)]
-#[repr(u8)]
-pub enum Color {
-	Black      = 0x0,
-	Blue       = 0x1,
-	Green      = 0x2,
-	Cyan       = 0x3,
-	Red        = 0x4,
-	Magenta    = 0x5,
-	Brown      = 0x6,
-	LightGray  = 0x7,
-	DarkGray   = 0x8,
-	LightBlue  = 0x9,
-	LightGreen = 0xa,
-	LightCyan  = 0xb,
-	LightRed   = 0xc,
-	Pink       = 0xd,
-	Yellow     = 0xe,
-	White      = 0xf,
+impl ::core::fmt::Write for Writer {
+	fn write_str(&mut self, s: &str) -> ::core::fmt::Result {
+		for byte in s.bytes() {
+			self.write_byte(byte);
+		}
+		Ok(())
+	}
 }
 
 #[derive(Clone, Copy)]
@@ -89,6 +114,7 @@ impl ColorCode {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 struct ScreenChar {
 	ascii_character: u8,
 	color_code: ColorCode,
