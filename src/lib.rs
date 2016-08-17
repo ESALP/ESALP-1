@@ -8,9 +8,12 @@
  * except according to those terms.
  */
 #![feature(lang_items)]
+#![feature(const_fn, unique)]
 #![no_std]
 
 extern crate rlibc;
+
+mod vga_buffer;
 
 extern {
 	fn KEXIT() -> !;
@@ -30,12 +33,12 @@ pub extern fn rust_main() {
 	let buffer_ptr = (0xb8000 + 1988) as *mut _;
 	unsafe { *buffer_ptr = message };
 
-	unsafe{ KEXIT() }
+	vga_buffer::test_print();
 }
 
 #[allow(non_snake_case)]
 #[no_mangle]
-pub extern "C" fn _Unwind_Resume() -> ! {
+pub extern fn _Unwind_Resume() -> ! {
 	unsafe{ KEXIT() }
 }
 
