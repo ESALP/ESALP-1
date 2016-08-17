@@ -34,6 +34,8 @@ start:
 	call set_up_page_tables
 	call enable_paging
 
+	call set_up_SSE
+
 	; Load the 64-bit GDT
 	lgdt [gdt64.pointer]
 
@@ -159,7 +161,7 @@ set_up_SSE:
 
 	; enable SSE
 	mov eax, cr0
-	and ax, 0xFFFFB        ; clear coprocessor emulation CRO.EM
+	and ax, 0xFFFB         ; clear coprocessor emulation CRO.EM
 	or ax, 0x2             ; set coprocessor monitoring CR0.MP
 	mov cr0, eax
 

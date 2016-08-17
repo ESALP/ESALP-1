@@ -17,7 +17,21 @@ extern {
 }
 
 #[no_mangle]
-pub extern fn rust_main() {}
+pub extern fn rust_main() {
+	let mut message = [0x3f;34];
+	{
+		let hello = b"\x02\x01 Hello Rust! \x01\x02";
+
+		for (i,char_byte) in hello.into_iter().enumerate() {
+			message[i * 2] = *char_byte;
+		}
+	}
+	// write msg to the center of the text buffer
+	let buffer_ptr = (0xb8000 + 1988) as *mut _;
+	unsafe { *buffer_ptr = message };
+
+	unsafe{ KEXIT() }
+}
 
 #[allow(non_snake_case)]
 #[no_mangle]
