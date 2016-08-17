@@ -1,0 +1,18 @@
+[package]
+name = "ESALP"
+version = "0.1.0"
+authors = ["JJ Garzella <jjgarzella@gmail.com>","Calvin Lee <cyrus296@gmail.com>"]
+
+[lib]
+crate-type = ["staticlib"]
+
+[dependencies]
+rlibc = "0.1.4"
+
+# Dev profile, `cargo build`.
+[profile.dev]
+panic = "abort"
+
+# Release profile `cargo build --release`.
+[profile.release]
+panic = "abort"

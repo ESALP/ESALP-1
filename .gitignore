@@ -9,6 +9,7 @@
 
 #cargo
 /target/
+Cargo.lock
 
 #build
 /build/

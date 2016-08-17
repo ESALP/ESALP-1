@@ -7,11 +7,16 @@
 ; except according to those terms.
 
 global long_mode_start
+global KEXIT
+
+extern rust_main
 
 section .text
 bits 64
 long_mode_start:
-	; Print "OKAY" to the screen
+	; call Rust
+	call rust_main
+
 	mov rax, 0x2f592f412f4b2f4f
 	mov qword [0xb8000], rax
 
@@ -25,6 +30,7 @@ long_mode_start:
 	;    Since they are disabled, this will lock up the computer.
 	; 3) Jump to the hlt instruction if it ever wakes up due to a
 	;    non-maskable interrupt occurring or due to system management mode.
+KEXIT:
 	cli
 .loop:
 	hlt

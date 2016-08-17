@@ -37,11 +37,11 @@ start:
 	; Load the 64-bit GDT
 	lgdt [gdt64.pointer]
 
-    ; update selectors
-    mov ax, gdt64.data ; data offset
-    mov ss, ax
-    mov ds, ax
-    mov es, ax
+	; update selectors
+	mov ax, gdt64.data ; data offset
+	mov ss, ax
+	mov ds, ax
+	mov es, ax
 
 	; Load the code selector with a far jmp
 	; From now on instructions are 64 bits and this file is invalid
@@ -150,6 +150,28 @@ check_long_mode:
 	mov al, "2"
 	jmp error
 
+; Check for SSE and enable it. Throw error 'a' if unsupported
+set_up_SSE:
+	mov eax, 0x1
+	cpuid
+	test edx, 1 << 25
+	jz .no_SSE
+
+	; enable SSE
+	mov eax, cr0
+	and ax, 0xFFFFB        ; clear coprocessor emulation CRO.EM
+	or ax, 0x2             ; set coprocessor monitoring CR0.MP
+	mov cr0, eax
+
+	mov eax, cr4
+	or ax, 3 << 9          ; set CR4.OSFXSR and CR4.OSXMMEXCPT at the same time
+	mov cr4, eax
+
+	ret
+.no_SSE:
+	mov al, "a"
+	jmp error
+
 ; Prints `ERR: ` and the given error code to screen and hangs.
 ; parameter: error code (in ascii) in al
 error:
@@ -166,11 +188,11 @@ section .bss
 ; the first gigabyte of our kernel
 align 4096
 p4_table:
-    resb 4096
+	resb 4096
 p3_table:
-    resb 4096
+	resb 4096
 p2_table:
-    resb 4096
+	resb 4096
 ; The multiboot standard does not define the value of the stack pointer register
 ; (esp) and it is up to the kernel to provide a stack. This allocates room for a
 ; small stack by creating a symbol at the bottom of it, then allocating 64
