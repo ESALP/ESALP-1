@@ -8,7 +8,6 @@
  * except according to those terms.
  */
 use core::ptr::Unique;
-use core::fmt;
 use spin::Mutex;
 
 const BUFFER_HEIGHT: usize = 25;
