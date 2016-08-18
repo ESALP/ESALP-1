@@ -35,4 +35,13 @@ pub extern fn _Unwind_Resume() -> ! {
 }
 
 #[lang = "eh_personality"] extern fn eh_personality() {}
-#[lang = "panic_fmt"] extern fn panic_fmt() -> ! {unsafe {KEXIT()}}
+#[lang = "panic_fmt"]
+extern fn panic_fmt(args: ::core::fmt::Arguments,
+					file: &'static str,
+					line: u32) -> ! {
+	vga_buffer::WRITER.lock().color(vga_buffer::Color::Red,
+									vga_buffer::Color::Black);
+	println!("\n\nPANIC at {}:{}", file, line);
+	println!("\t{}",args);
+	unsafe { KEXIT() }
+}

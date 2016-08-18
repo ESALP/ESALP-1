@@ -92,6 +92,10 @@ impl Writer {
 		}
 	}
 
+	pub fn color(&mut self, fg: Color, bg: Color) {
+		self.color_code = ColorCode::new(fg,bg);
+	}
+
 	fn buffer(&mut self) -> &mut Buffer {
 		unsafe { self.buffer.get_mut() }
 	}
