@@ -8,6 +8,7 @@
  * except according to those terms.
  */
 use core::ptr::Unique;
+use core::fmt;
 use spin::Mutex;
 
 const BUFFER_HEIGHT: usize = 25;
@@ -25,10 +26,10 @@ macro_rules! println {
 }
 
 macro_rules! print {
-	($(arg:tt)*) => ({
+	($($arg:tt)*) => ({
 		use core::fmt::Write;
-		let mut writer = $crate::vga_buffer::Writer.lock();
-		writer.write_fmt(format_args!($($arg)*).unwrap());
+		$crate::vga_buffer::WRITER.lock()
+			.write_fmt(format_args!($($arg)*)).unwrap();
 	});
 }
 
