@@ -12,7 +12,7 @@ Project Goals:
 ##Features
 Right now it doesn't do much but... it will soon.
 
-Current featurs:
+Current features:
 
 + Can print to the VGA buffer (in 255 different colors!)
 + Simple memory allocation (but no deallocation)
