@@ -17,6 +17,7 @@ extern crate multiboot2;
 
 #[macro_use]
 mod vga_buffer;
+mod memory;
 
 extern {
 	fn KEXIT() -> !;
@@ -31,6 +32,7 @@ pub extern fn rust_main(multiboot_info_address: usize) {
 	let memory_map_tag = boot_info.memory_map_tag()
 		.expect("Memory map tag required");
 
+	// Print state information
 	println!("Memory areas:");
 	for area in memory_map_tag.memory_areas() {
 		println!("\tStart:0x{:x}, length: 0x{:x}",
@@ -56,6 +58,12 @@ pub extern fn rust_main(multiboot_info_address: usize) {
 	let multiboot_end = multiboot_start + (boot_info.total_size as usize);
 	println!("Multiboot start: 0x{:x}, Multiboot end: 0x{:x}",
 		multiboot_start,multiboot_end);
+
+	// now create an allocator for memory
+	let mut frame_allocator = memory::AreaFrameAllocator::new(
+		kernel_start as usize, kernel_end as usize,
+		multiboot_start as usize, multiboot_end as usize,
+		memory_map_tag.memory_areas());
 }
 
 #[allow(non_snake_case)]
