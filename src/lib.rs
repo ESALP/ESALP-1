@@ -13,6 +13,7 @@
 
 extern crate rlibc;
 extern crate spin;
+extern crate multiboot2;
 
 #[macro_use]
 mod vga_buffer;
@@ -22,10 +23,39 @@ extern {
 }
 
 #[no_mangle]
-pub extern fn rust_main() {
-	use core::fmt::Write;
+pub extern fn rust_main(multiboot_info_address: usize) {
 	vga_buffer::clear_screen();
-	println!("Hello Rust log");
+	println!("Hello Rust log \x01");
+
+	let boot_info = unsafe{ multiboot2::load(multiboot_info_address) };
+	let memory_map_tag = boot_info.memory_map_tag()
+		.expect("Memory map tag required");
+
+	println!("Memory areas:");
+	for area in memory_map_tag.memory_areas() {
+		println!("\tStart:0x{:x}, length: 0x{:x}",
+			area.base_addr, area.length);
+	}
+	let elf_sections_tag = boot_info.elf_sections_tag()
+		.expect("Elf-sections tag required");
+
+	println!("kernel sections:");
+	for section in elf_sections_tag.sections() {
+		println!("\taddr: 0x{:x}, size: 0x{:x}, flags: 0x{:x}",
+			section.addr, section.size, section.flags);
+	}
+
+	let kernel_start = elf_sections_tag.sections().map(|s| s.addr)
+		.min().unwrap();
+	let kernel_end = elf_sections_tag.sections().map(|s| s.addr + s.size)
+		.max().unwrap();
+	println!("Kernel start: 0x{:x}, Kernel end: 0x{:x}",
+		kernel_start,kernel_end);
+
+	let multiboot_start = multiboot_info_address;
+	let multiboot_end = multiboot_start + (boot_info.total_size as usize);
+	println!("Multiboot start: 0x{:x}, Multiboot end: 0x{:x}",
+		multiboot_start,multiboot_end);
 }
 
 #[allow(non_snake_case)]

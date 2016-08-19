@@ -26,6 +26,7 @@ start:
 	; stack (as it grows downwards on x86 systems). This is necessarily done
 	; in assembly as languages such as Rust cannot function without a stack.
 	mov esp, stack_top
+	mov edi, ebx
 
 	call check_multiboot
 	call check_cpuid
@@ -207,7 +208,7 @@ p2_table:
 ; undefined behavior.
 align 16
 stack_bottom:
-	resb 64
+	resb 4096
 stack_top:
 
 section .rodata
