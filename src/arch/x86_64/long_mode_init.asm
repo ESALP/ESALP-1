@@ -41,3 +41,46 @@ KEXIT:
 .loop:
 	hlt
 	jmp .loop
+
+; Here we define the in and out functions we will use for interrupts
+global inb inw inl
+global outb outw outl
+
+; We follow the System V calling conventions, which rust uses, in order to
+; get and return arguments. In general, all calling arguments are passed in
+; rdi, rsi, rdx, rcx( or r10?), r8 and r9 or varients thereof (the first 32
+; bit argument will be passed in edi, the first 16 in di, and the first 8 in
+; di as well) and the return value is passed in rax.
+; All registers except RBP, RBX, and r12-r15 are caller preserved :)
+inb:
+	mov dx, di
+	in al, dx
+	ret
+
+outb:
+	mov ax, di
+	mov dx, si
+	out dx, al
+	ret
+
+inw:
+	mov dx, di
+	in ax, dx
+	ret
+
+outb:
+	mov ax, di
+	mov dx, si
+	out dx, ax
+	ret
+
+inl:
+	mov dx, di
+	in eax, dx
+	ret
+
+outb:
+	mov eax, edi
+	mov dx, si
+	out dx, eax
+	ret
