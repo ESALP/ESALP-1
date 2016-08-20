@@ -58,8 +58,8 @@ inb:
 	ret
 
 outb:
-	mov ax, di
-	mov dx, si
+	mov dx, di
+	mov ax, si
 	out dx, al
 	ret
 
@@ -68,9 +68,9 @@ inw:
 	in ax, dx
 	ret
 
-outb:
-	mov ax, di
-	mov dx, si
+outw:
+	mov dx, di
+	mov ax, si
 	out dx, ax
 	ret
 
@@ -79,8 +79,8 @@ inl:
 	in eax, dx
 	ret
 
-outb:
-	mov eax, edi
-	mov dx, si
+outl:
+	mov dx, di
+	mov eax, esi
 	out dx, eax
 	ret

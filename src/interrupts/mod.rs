@@ -8,10 +8,10 @@
  * except according to those terms.
  */
 extern{
-	fn inb (num: u8 ) -> u8;
-	fn outb(num: u8 );
-	fn inw (num: u16) -> u16
-	fn outw(num: u16);
-	fn inl (num: u32) -> u32;
-	fn outl(num: u32);
+	fn inb (port: u16) -> u8;
+	fn outb(port: u16, value: u8);
+	fn inw (port: u16) -> u16
+	fn outw(port: u16, value: u16);
+	fn inl (port: u16) -> u32;
+	fn outl(port: u16, value: u32);
 }
