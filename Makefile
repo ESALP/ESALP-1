@@ -7,8 +7,9 @@
 # except according to those terms.
 
 arch ?= x86_64
+name ?= ESALP
 target ?= $(arch)-unknown-linux-gnu
-rust_os := target/$(target)/debug/libESALP.a
+rust_os := target/$(target)/debug/lib$(name).a
 kernel := build/kernel-$(arch).bin
 iso := build/os-$(arch).iso
 
@@ -26,11 +27,20 @@ clean:
 	@cargo clean
 	@rm -r build
 
+qflags := -s
+
+ifeq ($(int),yes)
+	qflags += -d int
+endif
+ifeq ($(kvm),yes)
+	qflags += -enable-kvm
+endif
+
 run: $(iso)
-	@qemu-system-x86_64 -cdrom $(iso) -s
+	@qemu-system-x86_64 $(qflags) -cdrom $(iso)
 
 debug: $(iso)
-	@qemu-system-x86_64 -cdrom $(iso) -s -S
+	@qemu-system-x86_64 $(qflags) -cdrom $(iso) -S
 
 iso: $(iso)
 
@@ -47,6 +57,7 @@ $(kernel): cargo $(rust_os) $(assembly_object_files) $(linker_script)
 
 cargo:
 	@cargo build --target $(target)
+
 # compile assembly files
 build/arch/$(arch)/%.o: src/arch/$(arch)/%.asm
 	@mkdir -p $(shell dirname $@)
