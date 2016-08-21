@@ -43,8 +43,6 @@ KEXIT:
 	jmp .loop
 
 ; Here we define the in and out functions we will use for interrupts
-global inb inw inl
-global outb outw outl
 
 ; We follow the System V calling conventions, which rust uses, in order to
 ; get and return arguments. In general, all calling arguments are passed in
@@ -52,33 +50,39 @@ global outb outw outl
 ; bit argument will be passed in edi, the first 16 in di, and the first 8 in
 ; di as well) and the return value is passed in rax.
 ; All registers except RBP, RBX, and r12-r15 are caller preserved :)
+global inb
 inb:
 	mov dx, di
 	in al, dx
 	ret
 
+global outb
 outb:
 	mov dx, di
 	mov ax, si
 	out dx, al
 	ret
 
+global inw
 inw:
 	mov dx, di
 	in ax, dx
 	ret
 
+global outw
 outw:
 	mov dx, di
 	mov ax, si
 	out dx, ax
 	ret
 
+global inl
 inl:
 	mov dx, di
 	in eax, dx
 	ret
 
+global outl
 outl:
 	mov dx, di
 	mov eax, esi

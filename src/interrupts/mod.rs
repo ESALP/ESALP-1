@@ -7,11 +7,14 @@
  * This file may not be copied, modified, or distributed
  * except according to those terms.
  */
-extern{
-	fn inb (port: u16) -> u8;
-	fn outb(port: u16, value: u8);
-	fn inw (port: u16) -> u16
-	fn outw(port: u16, value: u16);
-	fn inl (port: u16) -> u32;
-	fn outl(port: u16, value: u32);
-}
+
+use spin::Mutex;
+pub use self::port::Port;
+
+mod port;
+
+pub static KEYBOARD: Mutex<Port<u8>> = Mutex::new(
+	unsafe {
+		Port::new(0x60)
+	}
+);
