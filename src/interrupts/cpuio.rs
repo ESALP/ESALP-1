@@ -7,6 +7,7 @@
  * This file may not be copied, modified, or distributed
  * except according to those terms.
  */
+#![allow(dead_code)]
 use core::marker::PhantomData;
 
 extern{
@@ -47,6 +48,7 @@ impl InOut for u32 {
 	}
 }
 
+// TODO enable safety checking in new()
 pub struct Port<T> {
 	port: u16,
 	phantom: PhantomData<T>,
@@ -68,5 +70,25 @@ impl<T: InOut> Port<T> {
 		unsafe {
 			T::port_out(self.port, value)
 		}
+	}
+}
+
+pub struct UnsafePort<T> {
+	port: u16,
+	phantom: PhantomData<T>,
+}
+#[allow(dead_code)]
+impl<T: InOut> UnsafePort<T> {
+	pub const unsafe fn new(port: u16) -> UnsafePort<T>{
+		UnsafePort {
+			port: port,
+			phantom: PhantomData,
+		}
+	}
+	pub unsafe fn read(&mut self) -> T {
+		T::port_in(self.port)
+	}
+	pub unsafe fn write(&mut self, value: T) {
+		T::port_out(self.port, value)
 	}
 }

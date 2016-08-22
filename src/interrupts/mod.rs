@@ -7,14 +7,22 @@
  * This file may not be copied, modified, or distributed
  * except according to those terms.
  */
+#![allow(dead_code)]
 
 use spin::Mutex;
-pub use self::port::Port;
+use self::pic::ChainedPICs;
+pub use self::cpuio::Port;
 
-mod port;
+mod cpuio;
+mod pic;
 
 pub static KEYBOARD: Mutex<Port<u8>> = Mutex::new(
 	unsafe {
 		Port::new(0x60)
+	}
+);
+pub static PIC: Mutex<ChainedPICs> = Mutex::new(
+	unsafe {
+		ChainedPICs::new(0x20,0x28)
 	}
 );

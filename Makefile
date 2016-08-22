@@ -35,6 +35,9 @@ endif
 ifeq ($(kvm),yes)
 	qflags += -enable-kvm
 endif
+ifeq ($(reboot),no)
+	qflags += --no-reboot
+endif
 
 run: $(iso)
 	@qemu-system-x86_64 $(qflags) -cdrom $(iso)
