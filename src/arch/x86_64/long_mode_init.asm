@@ -18,13 +18,8 @@ long_mode_start:
 	call rust_main
 
 	; rust main returned, print `OS returned!`
-	mov rax, 0x4f724f204f534f4f
-	mov [0xb8000], rax
-	mov rax, 0x4f724f754f744f65
-	mov [0xb8008], rax
-	mov rax, 0x4f214f644f654f6e
-	mov [0xb8010], rax
-	hlt
+	mov rdi, strings.os_return
+	call eputs
 
 	; If the system has nothing more to do, put the computer into an
 	; infinite loop. To do that:
@@ -88,3 +83,34 @@ outl:
 	mov eax, esi
 	out dx, eax
 	ret
+
+; Error puts function for long mode, if we
+; ever need to extend the file to need it
+; result: printf("ERROR: %s",rdi);
+eputs:
+	;0x04, red on black.
+	mov rax, 0x044F045204520445
+	mov [0xb8000], rax
+	mov rax, 0x00000420043a0452
+	mov [0xb8008], rax
+puts:
+	mov rbx, 0xb800e
+.loop:
+	mov al, [rdi]
+
+	test al, al
+	jz KEXIT
+
+	mov byte [rbx], al
+	inc rbx
+	mov byte [rbx], 0x04
+	inc rbx
+	inc rdi
+	jmp .loop
+
+
+section .data
+
+strings:
+.os_return:
+	db 'OS returned',0
