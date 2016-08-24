@@ -10,6 +10,7 @@ global long_mode_start
 global KEXIT
 
 extern rust_main
+extern eputs
 
 section .text
 bits 64
@@ -37,79 +38,8 @@ KEXIT:
 	hlt
 	jmp .loop
 
-; Here we define the in and out functions we will use for interrupts
 
-; We follow the System V calling conventions, which rust uses, in order to
-; get and return arguments. In general, all calling arguments are passed in
-; rdi, rsi, rdx, rcx( or r10?), r8 and r9 or varients thereof (the first 32
-; bit argument will be passed in edi, the first 16 in di, and the first 8 in
-; di as well) and the return value is passed in rax.
-; All registers except RBP, RBX, and r12-r15 are caller preserved :)
-global inb
-inb:
-	mov dx, di
-	in al, dx
-	ret
-
-global outb
-outb:
-	mov dx, di
-	mov ax, si
-	out dx, al
-	ret
-
-global inw
-inw:
-	mov dx, di
-	in ax, dx
-	ret
-
-global outw
-outw:
-	mov dx, di
-	mov ax, si
-	out dx, ax
-	ret
-
-global inl
-inl:
-	mov dx, di
-	in eax, dx
-	ret
-
-global outl
-outl:
-	mov dx, di
-	mov eax, esi
-	out dx, eax
-	ret
-
-; Error puts function for long mode, if we
-; ever need to extend the file to need it
-; result: printf("ERROR: %s",rdi);
-eputs:
-	;0x04, red on black.
-	mov rax, 0x044F045204520445
-	mov [0xb8000], rax
-	mov rax, 0x00000420043a0452
-	mov [0xb8008], rax
-puts:
-	mov rbx, 0xb800e
-.loop:
-	mov al, [rdi]
-
-	test al, al
-	jz KEXIT
-
-	mov byte [rbx], al
-	inc rbx
-	mov byte [rbx], 0x04
-	inc rbx
-	inc rdi
-	jmp .loop
-
-
-section .data
+section .rodata
 
 strings:
 .os_return:

@@ -105,7 +105,7 @@ check_multiboot:
 	ret
 .no_multiboot:
 	mov al, "0"
-	jmp error
+	jmp _error
 
 check_cpuid:
 	; Check if CPUID is supported by trying to flip the ID bit (bit 21)
@@ -134,7 +134,7 @@ check_cpuid:
 	ret
 .no_cpuid:
 	mov al, "1"
-	jmp error
+	jmp _error
 
 check_long_mode:
 	; test if extended processor info in available
@@ -151,7 +151,7 @@ check_long_mode:
 	ret
 .no_long_mode:
 	mov al, "2"
-	jmp error
+	jmp _error
 
 ; Check for SSE and enable it. Throw error 'a' if unsupported
 set_up_SSE:
@@ -173,11 +173,11 @@ set_up_SSE:
 	ret
 .no_SSE:
 	mov al, "a"
-	jmp error
+	jmp _error
 
 ; Prints `ERR: ` and the given error code to screen and hangs.
 ; parameter: error code (in ascii) in al
-error:
+_error:
 	mov dword [0xb8000], 0x4f524f45
 	mov dword [0xb8004], 0x4f3a4f52
 	mov dword [0xb8008], 0x4f204f20
@@ -196,6 +196,7 @@ p3_table:
 	resb 4096
 p2_table:
 	resb 4096
+
 ; The multiboot standard does not define the value of the stack pointer register
 ; (esp) and it is up to the kernel to provide a stack. This allocates room for a
 ; small stack by creating a symbol at the bottom of it, then allocating 64

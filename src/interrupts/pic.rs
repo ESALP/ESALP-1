@@ -7,30 +7,31 @@
  * This file may not be copied, modified, or distributed
  * except according to those terms.
  */
+
 #![allow(dead_code)]
 // These are taken from the OS Dev wiki,
 // not all of them are used. However they
 // will most likely be useful.
-const PIC1: u16				=0x20;		/* IO base address for master PIC */
-const PIC2: u16				=0xA0;		/* IO base address for slave PIC */
-const PIC1_COMMAND: u16		=PIC1;
-const PIC1_DATA: u16    	=(PIC1+1);
-const PIC2_COMMAND: u16		=PIC2;
-const PIC2_DATA: u16		=(PIC2+1);
+const PIC1:           u16 = 0x20;    /* IO base address for master PIC */
+const PIC2:           u16 = 0xA0;    /* IO base address for slave PIC */
+const PIC1_COMMAND:   u16 = PIC1;
+const PIC1_DATA:      u16 = (PIC1+1);
+const PIC2_COMMAND:   u16 = PIC2;
+const PIC2_DATA:      u16 = (PIC2+1);
 
-const ICW1_ICW4: u8			=0x01;		/* ICW4 (not) needed */
-const ICW1_SINGLE: u8		=0x02;		/* Single (cascade) mode */
-const ICW1_INTERVAL4: u8	=0x04;		/* Call address interval 4 (8) */
-const ICW1_LEVEL: u8		=0x08;		/* Level triggered (edge) mode */
-const ICW1_INIT: u8			=0x10;		/* Initialization - required! */
+const ICW1_ICW4:      u8  = 0x01;    /* ICW4 (not) needed */
+const ICW1_SINGLE:    u8  = 0x02;    /* Single (cascade) mode */
+const ICW1_INTERVAL4: u8  = 0x04;    /* Call address interval 4 (8) */
+const ICW1_LEVEL:     u8  = 0x08;    /* Level triggered (edge) mode */
+const ICW1_INIT:      u8  = 0x10;    /* Initialization - required! */
 
-const ICW4_8086: u8			=0x01;		/* 8086/88 (MCS-80/85) mode */
-const ICW4_AUTO: u8			=0x02;		/* Auto (normal) EOI */
-const ICW4_BUF_SLAVE: u8	=0x08;		/* Buffered mode/slave */
-const ICW4_BUF_MASTER: u8	=0x0C;		/* Buffered mode/master */
-const ICW4_SFNM: u8			=0x10;		/* Special fully nested (not) */
+const ICW4_8086:      u8  = 0x01;    /* 8086/88 (MCS-80/85) mode */
+const ICW4_AUTO:      u8  = 0x02;    /* Auto (normal) EOI */
+const ICW4_BUF_SLAVE: u8  = 0x08;    /* Buffered mode/slave */
+const ICW4_BUF_MASTER:u8  = 0x0C;    /* Buffered mode/master */
+const ICW4_SFNM:      u8  = 0x10;    /* Special fully nested (not) */
 
-const PIC_EOI: u8			=0x20;		/* End-of-Interrupt command code */
+const PIC_EOI:        u8  = 0x20;    /* End-of-Interrupt command code */
 
 use interrupts::cpuio::{Port, UnsafePort};
 
