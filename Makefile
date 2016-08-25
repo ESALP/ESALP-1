@@ -39,6 +39,14 @@ ifeq ($(reboot),no)
 	qflags += --no-reboot
 endif
 
+binutils_prefix :=
+
+if eq($(cross),yes)
+	binutils_prefix = x86_64-elf-
+endif	
+
+ld := @$(binutils_prefix)ld
+
 run: $(iso)
 	@qemu-system-x86_64 $(qflags) -cdrom $(iso)
 
@@ -53,9 +61,9 @@ $(iso): $(kernel) $(grub_cfg)
 	@cp $(grub_cfg) build/isofiles/boot/grub
 	@grub-mkrescue -o $(iso) build/isofiles 2> /dev/null
 	@rm -r build/isofiles
-
+	
 $(kernel): xargo $(rust_os) $(assembly_object_files) $(linker_script)
-	@ld -n --gc-sections -T $(linker_script) -o $(kernel) \
+	$(ld) -n --gc-sections -T $(linker_script) -o $(kernel) \
 		$(assembly_object_files) $(rust_os)
 
 xargo:
