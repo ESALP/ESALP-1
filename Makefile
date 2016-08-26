@@ -41,7 +41,7 @@ endif
 
 binutils_prefix :=
 
-if eq($(cross),yes)
+ifeq ($(cross),yes)
 	binutils_prefix = x86_64-elf-
 endif	
 
