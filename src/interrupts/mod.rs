@@ -16,6 +16,11 @@ pub use self::cpuio::Port;
 
 mod cpuio;
 mod pic;
+mod idt;
+
+lazy_static! {
+	static ref IDT: idt::Idt = idt::Idt::new();
+}
 
 pub static KEYBOARD: Mutex<Port<u8>> = Mutex::new(
 	unsafe {
