@@ -11,6 +11,7 @@
 #![allow(dead_code)]
 
 use spin::Mutex;
+use vga_buffer::print_error;
 use self::pic::ChainedPICs;
 pub use self::cpuio::Port;
 
@@ -18,8 +19,17 @@ mod cpuio;
 mod pic;
 mod idt;
 
+extern {
+	fn divide_by_zero() -> !;
+	fn KEXIT() -> !;
+}
+
 lazy_static! {
-	static ref IDT: idt::Idt = idt::Idt::new();
+	static ref IDT: idt::Idt = {
+		let mut idt = idt::Idt::new();
+		idt.set_handler(0,divide_by_zero);
+		idt
+	};
 }
 
 pub static KEYBOARD: Mutex<Port<u8>> = Mutex::new(
@@ -33,9 +43,13 @@ pub static PIC: Mutex<ChainedPICs> = Mutex::new(
 	}
 );
 
+pub fn init() {
+	IDT.load();
+}
+
 #[derive(Debug)]
 #[repr(C)]
-struct ExceptionStructFrame {
+pub struct ExceptionStackFrame {
 	instruction_pointer: u64,
 	code_segment: u64,
 	cpu_flags: u64,
@@ -44,7 +58,7 @@ struct ExceptionStructFrame {
 }
 #[derive(Debug)]
 #[repr(C)]
-struct EExceptionStructFrame {
+pub struct EExceptionStackFrame {
 	instruction_pointer: u64,
 	code_segment: u64,
 	cpu_flags: u64,
@@ -64,7 +78,7 @@ struct EExceptionStructFrame {
  *  | Bound Range Exceeded          | 5  (0x5)   | Fault       | #BR        | No            |
  *  | Invalid Opcode                | 6  (0x6)   | Fault       | #UD        | No            |
  *  | Device not Availible          | 7  (0x7)   | Fault       | #NM        | No            |
- *  | Double Fault                  | 5  (0x5)   | Abort       | #OF        | No            |
+ *  | Double Fault                  | 5  (0x5)   | Abort       | #DF        | No            |
  *  | ~Coprocessor Segment Overrun~ | 8  (0x8)   | Fault       | -          | No            |
  *  | Invalid TSS                   | 10 (0xA)   | Fault       | #TS        | Yes           |
  *  | Segment not Present           | 11 (0xB)   | Fault       | #NP        | Yes           |
@@ -84,3 +98,14 @@ struct EExceptionStructFrame {
  *  | FPU Error Interrupt           | 25 (0x18)  | Interrupt   | #FERR      | No            |
  *  | ----------------------------- | ---------- | ----------- | ---------- | ------------- |
  */
+
+#[no_mangle]
+pub extern "C" fn rust_de_interrupt_handler(stack_frame: *const ExceptionStackFrame)
+	-> !
+{
+	unsafe {
+		print_error(format_args!("EXCEPTION DIVIDE BY ZERO\n{:#?}",
+								 *stack_frame));
+		KEXIT();
+	}
+}

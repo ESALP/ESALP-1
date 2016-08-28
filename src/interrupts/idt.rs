@@ -11,7 +11,7 @@
 use x86::segmentation::{self,SegmentSelector};
 use bit_field::BitField;
 
-pub type HandlerFunc = extern "C" fn() -> !;
+pub type HandlerFunc = unsafe extern "C" fn() -> !;
 
 pub struct Idt([Entry; 16]);
 

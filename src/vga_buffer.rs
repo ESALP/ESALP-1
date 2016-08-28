@@ -8,6 +8,7 @@
  * except according to those terms.
  */
 use core::ptr::Unique;
+use core::fmt;
 use spin::Mutex;
 
 const BUFFER_HEIGHT: usize = 25;
@@ -30,6 +31,18 @@ macro_rules! print {
 		$crate::vga_buffer::WRITER.lock()
 			.write_fmt(format_args!($($arg)*)).unwrap();
 	});
+}
+
+pub unsafe fn print_error(fmt: fmt::Arguments) {
+	use core::fmt::Write;
+
+	let mut writer = Writer {
+		column_position: 0,
+		color_code: ColorCode::new(Color::Red, Color::Black),
+		buffer: Unique::new(0xb8000 as *mut _),
+	};
+	writer.new_line();
+	writer.write_fmt(fmt);
 }
 
 pub fn clear_screen() {

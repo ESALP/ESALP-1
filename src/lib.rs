@@ -9,6 +9,7 @@
  */
 #![feature(lang_items)]
 #![feature(const_fn, unique)]
+#![feature(asm)]
 #![no_std]
 
 extern crate rlibc;
@@ -22,14 +23,14 @@ extern crate lazy_static;
 #[macro_use]
 mod vga_buffer;
 mod memory;
-mod interrupts;
+pub mod interrupts;
 
 extern {
 	fn KEXIT() -> !;
 }
 
 #[no_mangle]
-pub extern fn rust_main(multiboot_info_address: usize) {
+pub extern "C" fn rust_main(multiboot_info_address: usize) {
 	vga_buffer::clear_screen();
 	println!("Hello Rust log \x01");
 
@@ -69,6 +70,14 @@ pub extern fn rust_main(multiboot_info_address: usize) {
 		kernel_start as usize, kernel_end as usize,
 		multiboot_start as usize, multiboot_end as usize,
 		memory_map_tag.memory_areas());
+
+	// Initialize the IDT
+	interrupts::init();
+
+	// Provoke a #DF to test it
+	unsafe {
+		asm!("mov dx, 0; div dx" ::: "ax", "dx" : "volatile", "intel");
+	}
 }
 
 #[allow(non_snake_case)]
