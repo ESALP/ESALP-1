@@ -78,8 +78,8 @@ pub struct EExceptionStackFrame {
  *  | Bound Range Exceeded          | 5  (0x5)   | Fault       | #BR        | No            |
  *  | Invalid Opcode                | 6  (0x6)   | Fault       | #UD        | No            |
  *  | Device not Availible          | 7  (0x7)   | Fault       | #NM        | No            |
- *  | Double Fault                  | 5  (0x5)   | Abort       | #DF        | No            |
- *  | ~Coprocessor Segment Overrun~ | 8  (0x8)   | Fault       | -          | No            |
+ *  | Double Fault                  | 8  (0x5)   | Abort       | #DF        | No            |
+ *  | ~Coprocessor Segment Overrun~ | 9  (0x8)   | Fault       | -          | No            |
  *  | Invalid TSS                   | 10 (0xA)   | Fault       | #TS        | Yes           |
  *  | Segment not Present           | 11 (0xB)   | Fault       | #NP        | Yes           |
  *  | Stack-Segment Fault           | 12 (0xC)   | Fault       | #SS        | Yes           |
@@ -101,11 +101,9 @@ pub struct EExceptionStackFrame {
 
 #[no_mangle]
 pub extern "C" fn rust_de_interrupt_handler(stack_frame: *const ExceptionStackFrame)
-	-> !
 {
 	unsafe {
-		print_error(format_args!("EXCEPTION DIVIDE BY ZERO\n{:#?}",
-								 *stack_frame));
-		KEXIT();
+		panic!("EXCEPTION DIVIDE BY ZERO\n{:#?}",
+								 *stack_frame);
 	}
 }

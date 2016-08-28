@@ -6,6 +6,7 @@
 ; This file may not be copied, modified, or distributed
 ; except according to those terms.
 
+extern KEXIT
 extern rust_de_interrupt_handler
 
 global divide_by_zero
@@ -14,6 +15,7 @@ divide_by_zero:
 	; be saved by the caller.  I _think_ this list
 	; is correct, but don't quote me on that.  I'm
 	; probably forgetting something vital.
+	mov rdi, rsp
 	push rax
 	push rcx
 	push rdx
@@ -25,7 +27,6 @@ divide_by_zero:
 	push r11
 
 	; Call a Rust function.
-	mov rdi, rsp
 	call rust_de_interrupt_handler
 
 	; Pop the registers we saved.
@@ -39,5 +40,4 @@ divide_by_zero:
 	pop rcx
 	pop rax
 
-	; Pop CPU interrupt state
-	iretq
+	call KEXIT
