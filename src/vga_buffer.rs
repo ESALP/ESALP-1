@@ -81,9 +81,11 @@ pub struct Writer {
 impl Writer {
 	pub fn write_byte(&mut self, byte: u8) {
 		match byte {
-			b'\n' => self.new_line(),
-			b'\t' => self.write_str("    "),
-			byte  => {
+			b'\0'  => (),
+			b'\n'  => self.new_line(),
+			b'\t'  => self.write_str("    "),
+			b'\x08'=> self.back_space(),
+			byte   => {
 				if self.column_position >= BUFFER_WIDTH {
 					self.new_line();
 				}
@@ -121,6 +123,21 @@ impl Writer {
 		}
 		self.clear_row(BUFFER_HEIGHT-1);
 		self.column_position = 0;
+	}
+
+	fn back_space(&mut self) {
+		let row = BUFFER_HEIGHT - 1;
+		let col = self.column_position;
+		if col == 0 {
+			return;
+		}
+		else {
+			self.buffer().chars[row][col-1] = ScreenChar {
+				ascii_character: b' ',
+				color_code: self.color_code,
+			};
+			self.column_position = col - 1;
+		}
 	}
 
 	fn clear_row(&mut self, row: usize) {

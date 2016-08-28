@@ -74,10 +74,11 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) {
 	// Initialize the IDT
 	interrupts::init();
 
-	// Provoke a #DF to test it
-	unsafe {
-		asm!("mov dx, 0; div dx" ::: "ax", "dx" : "volatile", "intel");
-	}
+	println!("Try to write some things!");
+	vga_buffer::WRITER.lock().color(vga_buffer::Color::White,
+									vga_buffer::Color::Black);
+
+	loop {}
 }
 
 #[allow(non_snake_case)]

@@ -6,6 +6,8 @@
 ; This file may not be copied, modified, or distributed
 ; except according to those terms.
 
+section .text
+bits 64
 extern KEXIT
 ; We follow the System V calling conventions, which rust uses, in order to
 ; get and return arguments. In general, all calling arguments are passed in

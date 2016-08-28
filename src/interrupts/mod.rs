@@ -13,30 +13,34 @@
 use spin::Mutex;
 use vga_buffer::print_error;
 use self::pic::ChainedPICs;
-pub use self::cpuio::Port;
+use self::cpuio::Port;
+pub use self::keyboard::KEYBOARD;
 
+mod keyboard;
 mod cpuio;
 mod pic;
 mod idt;
 
 extern {
-	fn divide_by_zero() -> !;
-	fn KEXIT() -> !;
+	fn irq0();
+	fn irqE();
+	fn irq21();
+	fn sti();
+	fn KEXIT();
 }
 
 lazy_static! {
 	static ref IDT: idt::Idt = {
 		let mut idt = idt::Idt::new();
-		idt.set_handler(0,divide_by_zero);
+
+		// Initialize handlers
+		idt.set_handler(0x0,irq0);
+		idt.set_handler(0xE,irqE);
+		idt.set_handler(0x21,irq21);
 		idt
 	};
 }
 
-pub static KEYBOARD: Mutex<Port<u8>> = Mutex::new(
-	unsafe {
-		Port::new(0x60)
-	}
-);
 pub static PIC: Mutex<ChainedPICs> = Mutex::new(
 	unsafe {
 		ChainedPICs::new(0x20,0x28)
@@ -45,6 +49,14 @@ pub static PIC: Mutex<ChainedPICs> = Mutex::new(
 
 pub fn init() {
 	IDT.load();
+	unsafe {
+		{
+			let mut pic = PIC.lock();
+			pic.set_mask(0);
+			pic.initialize();
+		}
+		sti();
+	}
 }
 
 #[derive(Debug)]
@@ -105,5 +117,34 @@ pub extern "C" fn rust_de_interrupt_handler(stack_frame: *const ExceptionStackFr
 	unsafe {
 		panic!("EXCEPTION DIVIDE BY ZERO\n{:#?}",
 								 *stack_frame);
+	}
+}
+#[no_mangle]
+pub extern "C" fn rust_pf_interrupt_handler(stack_frame: *const EExceptionStackFrame)
+{
+	unsafe {
+		panic!("EXCEPTION PAGE FAULT\n{:#?}",
+								 *stack_frame);
+	}
+}
+
+#[no_mangle]
+pub extern "C" fn rust_keyboard_interrupt_handler() {
+	use vga_buffer::WRITER;
+	use self::keyboard::KBDUS;
+
+	let mut kb = KEYBOARD.lock();
+	match kb.read() {
+		// If the key was just pressed,
+		// then the top bit of it is set
+		x if x & 0x80 == 0 => {
+			WRITER.lock().write_byte(KBDUS[x as usize] as u8);
+		},
+		// TODO save keys that are pressed
+		// if this runs a key was released
+		_ => (),
+	}
+	unsafe {
+		PIC.lock().master.end_of_interrupt();
 	}
 }

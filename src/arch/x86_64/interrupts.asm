@@ -5,17 +5,18 @@
 ; http://opensource.org/licenses/MIT>, at your option.
 ; This file may not be copied, modified, or distributed
 ; except according to those terms.
-
 extern KEXIT
 extern rust_de_interrupt_handler
+extern rust_pf_interrupt_handler
+extern rust_keyboard_interrupt_handler
 
-global divide_by_zero
-divide_by_zero:
+section .text
+bits 64
+%macro pushall 0
 	; Save registers which are normally supposed to
 	; be saved by the caller.  I _think_ this list
 	; is correct, but don't quote me on that.  I'm
 	; probably forgetting something vital.
-	mov rdi, rsp
 	push rax
 	push rcx
 	push rdx
@@ -25,11 +26,8 @@ divide_by_zero:
 	push r9
 	push r10
 	push r11
-
-	; Call a Rust function.
-	call rust_de_interrupt_handler
-
-	; Pop the registers we saved.
+%endmacro
+%macro popall 0
 	pop r11
 	pop r10
 	pop r9
@@ -39,5 +37,32 @@ divide_by_zero:
 	pop rdx
 	pop rcx
 	pop rax
+%endmacro
 
-	call KEXIT
+global sti
+sti:
+	sti
+	ret
+
+global irq0
+irq0:
+	mov rdi, rsp
+	; Call a Rust function.
+	call rust_de_interrupt_handler
+
+global irqE
+irqE:
+	mov rdi, rsp
+	; Call a Rust function.
+	call rust_pf_interrupt_handler
+
+global irq21
+irq21:
+	pushall
+
+	; Call a Rust function.
+	call rust_keyboard_interrupt_handler
+
+	popall
+
+	iretq

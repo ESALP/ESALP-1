@@ -35,7 +35,7 @@ const PIC_EOI:        u8  = 0x20;    /* End-of-Interrupt command code */
 
 use interrupts::cpuio::{Port, UnsafePort};
 
-struct PIC {
+pub struct PIC {
 	offset: u8,
 	command: UnsafePort<u8>,
 	data: UnsafePort<u8>,
@@ -46,14 +46,26 @@ impl PIC {
 			interrupt <= self.offset + 8
 	}
 
-	unsafe fn end_of_interrupt(&mut self) {
+	pub unsafe fn end_of_interrupt(&mut self) {
 		self.command.write(PIC_EOI);
+	}
+
+	pub unsafe fn set_mask(&mut self, irq: u8) {
+		assert!(irq < 8);
+		let value = self.data.read() | (1 << irq);
+		self.data.write(value);
+	}
+
+	pub unsafe fn clear_mask(&mut self, irq: u8) {
+		assert!(irq < 8);
+		let value = self.data.read() | !(1 << irq);
+		self.data.write(value);
 	}
 }
 
 pub struct ChainedPICs {
-	master: PIC,
-	slave: PIC,
+	pub master: PIC,
+	pub slave: PIC,
 }
 impl ChainedPICs {
 	pub const unsafe fn new(offset1: u8, offset2: u8) -> ChainedPICs {
@@ -116,5 +128,25 @@ impl ChainedPICs {
 	pub fn handles_interrupt(&self, interrupt: u8) -> bool {
 		self.master.handles_interrupt(interrupt) &&
 			self.slave.handles_interrupt(interrupt)
+	}
+
+	pub unsafe fn set_mask(&mut self, irq: u8) {
+		assert!(irq < 16);
+		if irq < 8 {
+			self.master.set_mask(irq)
+		}
+		else {
+			self.slave.set_mask(irq - 8)
+		}
+	}
+
+	pub unsafe fn clear_mask(&mut self, irq: u8) {
+		assert!(irq < 16);
+		if irq < 8 {
+			self.master.clear_mask(irq)
+		}
+		else {
+			self.slave.clear_mask(irq - 8)
+		}
 	}
 }
