@@ -7,6 +7,9 @@
  * This file may not be copied, modified, or distributed
  * except according to those terms.
  */
+
+#![allow(dead_code)]
+
 use core::ptr::Unique;
 use core::fmt;
 use spin::Mutex;
@@ -42,7 +45,10 @@ pub unsafe fn print_error(fmt: fmt::Arguments) {
 		buffer: Unique::new(0xb8000 as *mut _),
 	};
 	writer.new_line();
-	writer.write_fmt(fmt);
+	match writer.write_fmt(fmt) {
+		Ok(_) => (),
+		Err(_) => panic!("Failed to write error: {}", fmt),
+	}
 }
 
 pub fn clear_screen() {

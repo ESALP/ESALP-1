@@ -10,6 +10,8 @@
 
 use spin::Mutex;
 use interrupts::cpuio::Port;
+use core::sync::atomic::AtomicBool;
+use core::{mem,ptr};
 
 pub static KBDUS: [char; 128] =
 [
@@ -55,6 +57,17 @@ pub static KBDUS: [char; 128] =
 	'\0','\0','\0','\0','\0','\0','\0','\0','\0','\0',
 	'\0','\0','\0','\0','\0','\0','\0','\0'
 ];
+
+lazy_static!{
+	pub static ref KEYS: [AtomicBool; 128] = unsafe {
+		let mut keys: [AtomicBool; 128] = mem::uninitialized();
+
+		for elem in &mut keys[..] {
+			ptr::write(elem, AtomicBool::new(false));
+		}
+		keys
+	};
+}
 
 pub static KEYBOARD: Mutex<Port<u8>> = Mutex::new(
 	unsafe {

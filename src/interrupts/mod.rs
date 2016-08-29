@@ -130,19 +130,32 @@ pub extern "C" fn rust_pf_interrupt_handler(stack_frame: *const EExceptionStackF
 
 #[no_mangle]
 pub extern "C" fn rust_keyboard_interrupt_handler() {
+    use core::sync::atomic::Ordering;
 	use vga_buffer::WRITER;
 	use self::keyboard::KBDUS;
+	use self::keyboard::KEYS;
 
 	let mut kb = KEYBOARD.lock();
 	match kb.read() {
 		// If the key was just pressed,
 		// then the top bit of it is set
 		x if x & 0x80 == 0 => {
-			WRITER.lock().write_byte(KBDUS[x as usize] as u8);
+			let pressed = KEYS[x as usize].swap(true,Ordering::AcqRel);
+			let mut byte = KBDUS[x as usize] as u8;
+
+			// If either shift is pressed, make it capital
+			// as long as it is not zero
+			byte -= 0x20 * (((KEYS[42].load(Ordering::Acquire) ||
+							  KEYS[54].load(Ordering::Acquire))&&
+							  byte > 96 && byte < 123) as u8);
+			WRITER.lock().write_byte(byte);
 		},
-		// TODO save keys that are pressed
-		// if this runs a key was released
-		_ => (),
+		// If this runs a key was released
+		// load a false into KEYS at that point
+		x =>{
+			let x = x & !0x80;
+			KEYS[x as usize].store(false,Ordering::Release);
+		},
 	}
 	unsafe {
 		PIC.lock().master.end_of_interrupt();
