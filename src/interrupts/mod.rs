@@ -5,7 +5,6 @@
 // http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed
 // except according to those terms.
-//
 
 #![allow(dead_code)]
 
@@ -104,7 +103,6 @@ pub struct EExceptionStackFrame {
 //  | Triple Fault                  | 24 (0x15)  | -           | -          | No            |
 //  | FPU Error Interrupt           | 25 (0x18)  | Interrupt   | #FERR      | No            |
 //  | ----------------------------- | ---------- | ----------- | ---------- | ------------- |
-//
 
 #[no_mangle]
 pub extern "C" fn rust_de_interrupt_handler(stack_frame: *const ExceptionStackFrame) {
