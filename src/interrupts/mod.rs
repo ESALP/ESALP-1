@@ -11,7 +11,6 @@
 use spin::Mutex;
 use vga_buffer::print_error;
 use self::pic::ChainedPICs;
-use self::cpuio::Port;
 pub use self::keyboard::KEYBOARD;
 
 mod keyboard;
@@ -119,31 +118,28 @@ pub extern "C" fn rust_pf_interrupt_handler(stack_frame: *const EExceptionStackF
 
 #[no_mangle]
 pub extern "C" fn rust_keyboard_interrupt_handler() {
-    use core::sync::atomic::Ordering;
     use vga_buffer::WRITER;
-    use self::keyboard::KBDUS;
-    use self::keyboard::KEYS;
 
     let mut kb = KEYBOARD.lock();
-    match kb.read() {
+    match kb.port.read() {
         // If the key was just pressed,
         // then the top bit of it is set
         x if x & 0x80 == 0 => {
-            let pressed = KEYS[x as usize].swap(true, Ordering::AcqRel);
-            let mut byte = KBDUS[x as usize] as u8;
+            kb.keys[x as usize] = true;
+            let mut byte = kb.kbmap[x as usize] as u8;
 
-            // If either shift is pressed, make it capital
-            // as long as it is not zero
+            // If either shift is pressed, make it 
+            // capital as long as it is alphabetic
             byte -= 0x20 *
-                    (((KEYS[42].load(Ordering::Acquire) || KEYS[54].load(Ordering::Acquire)) &&
-                      byte > 96 && byte < 123) as u8);
+                    ((kb.keys[42] || kb.keys[54]) &&
+                      byte > 96 && byte < 123) as u8;
             WRITER.lock().write_byte(byte);
         }
         // If this runs a key was released
-        // load a false into KEYS at that point
+        // load a false into kb.keys at that point
         x => {
             let x = x & !0x80;
-            KEYS[x as usize].store(false, Ordering::Release);
+            kb.keys[x as usize] = false;
         }
     }
     unsafe {
