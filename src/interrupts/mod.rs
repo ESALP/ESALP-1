@@ -27,15 +27,15 @@ extern "C" {
 }
 
 lazy_static! {
-	static ref IDT: idt::Idt = {
-		let mut idt = idt::Idt::new();
+    static ref IDT: idt::Idt = {
+        let mut idt = idt::Idt::new();
 
-		// Initialize handlers
-		idt.set_handler(0x0,irq0);
-		idt.set_handler(0xE,irqE);
-		idt.set_handler(0x21,irq21);
-		idt
-	};
+        // Initialize handlers
+        idt.set_handler(0x0,irq0);
+        idt.set_handler(0xE,irqE);
+        idt.set_handler(0x21,irq21);
+        idt
+    };
 }
 
 pub static PIC: Mutex<ChainedPICs> = Mutex::new(unsafe { ChainedPICs::new(0x20, 0x28) });
@@ -128,7 +128,7 @@ pub extern "C" fn rust_keyboard_interrupt_handler() {
             kb.keys[x as usize] = true;
             let mut byte = kb.kbmap[x as usize] as u8;
 
-            // If either shift is pressed, make it 
+            // If either shift is pressed, make it
             // capital as long as it is alphabetic
             byte -= 0x20 *
                     ((kb.keys[42] || kb.keys[54]) &&

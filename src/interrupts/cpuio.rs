@@ -52,7 +52,7 @@ pub struct Port<T> {
     port: u16,
     phantom: PhantomData<T>,
 }
-#[allow(dead_code)]
+
 impl<T: InOut> Port<T> {
     pub const unsafe fn new(port: u16) -> Port<T> {
         Port {
@@ -72,7 +72,7 @@ pub struct UnsafePort<T> {
     port: u16,
     phantom: PhantomData<T>,
 }
-#[allow(dead_code)]
+
 impl<T: InOut> UnsafePort<T> {
     pub const unsafe fn new(port: u16) -> UnsafePort<T> {
         UnsafePort {

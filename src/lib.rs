@@ -74,11 +74,12 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) {
              multiboot_end);
 
     // now create an allocator for memory
-    let mut frame_allocator = memory::AreaFrameAllocator::new(kernel_start as usize,
-                                                              kernel_end as usize,
-                                                              multiboot_start as usize,
-                                                              multiboot_end as usize,
-                                                              memory_map_tag.memory_areas());
+    let mut frame_allocator =
+        memory::AreaFrameAllocator::new(kernel_start as usize,
+                                        kernel_end as usize,
+                                        multiboot_start as usize,
+                                        multiboot_end as usize,
+                                        memory_map_tag.memory_areas());
 
     // Initialize the IDT
     interrupts::init();

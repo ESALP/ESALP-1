@@ -19,7 +19,7 @@ pub struct Keyboard<'a> {
 impl<'a> Keyboard<'a> {
     pub const fn new(kbmap: &'a [char; 128]) -> Keyboard<'a> {
         Keyboard {
-            port: unsafe {Port::new(0x80)},
+            port: unsafe {Port::new(0x60)},
             kbmap: kbmap,
             keys: [false; 128]
         }
@@ -34,7 +34,7 @@ pub static KEYBOARD: Mutex<Keyboard<'static>> = Mutex::new(
     Keyboard::new(&KBDUS)
 );
 
-pub static KBDUS: [char; 128] =
+static KBDUS: [char; 128] =
 [
     '\0',  '\x27', '1', '2', '3', '4', '5', 
     '6', '7', '8',    '9', '0', '-', '=', '\x08',/* Backspace */
