@@ -9,7 +9,6 @@
 #![allow(dead_code)]
 
 use spin::Mutex;
-use vga_buffer::print_error;
 use self::pic::ChainedPICs;
 pub use self::keyboard::KEYBOARD;
 
@@ -60,15 +59,6 @@ pub struct ExceptionStackFrame {
     cpu_flags: u64,
     stack_pointer: u64,
     stack_segment: u64,
-}
-#[derive(Debug)]
-#[repr(C)]
-pub struct EExceptionStackFrame {
-    instruction_pointer: u64,
-    code_segment: u64,
-    cpu_flags: u64,
-    stack_pointer: u64,
-    stack_segment: u64,
     error_code: u64,
 }
 
@@ -110,7 +100,7 @@ pub extern "C" fn rust_de_interrupt_handler(stack_frame: *const ExceptionStackFr
     }
 }
 #[no_mangle]
-pub extern "C" fn rust_pf_interrupt_handler(stack_frame: *const EExceptionStackFrame) {
+pub extern "C" fn rust_pf_interrupt_handler(stack_frame: *const ExceptionStackFrame) {
     unsafe {
         panic!("EXCEPTION PAGE FAULT\n{:#?}", *stack_frame);
     }

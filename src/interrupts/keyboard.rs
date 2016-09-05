@@ -8,8 +8,6 @@
 
 use spin::Mutex;
 use interrupts::cpuio::Port;
-use core::sync::atomic::AtomicBool;
-use core::{mem,ptr};
 
 pub struct Keyboard<'a> {
     pub port: Port<u8>,

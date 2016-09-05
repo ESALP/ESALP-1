@@ -46,6 +46,9 @@ sti:
 
 global irq0
 irq0:
+	; de does not have an error code
+	push qword 0
+
 	mov rdi, rsp
 	; Call a Rust function.
 	call rust_de_interrupt_handler
