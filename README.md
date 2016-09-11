@@ -3,7 +3,8 @@
 
 
 Project Goals:
-+ No C environment, ESALP will be written in Rust (and some Assembler of course)
++ No C environment
+ + ESALP will be written in Rust (and some Assembler of course)
 + Flexibility
 + **More to come**
 
@@ -14,6 +15,7 @@ Right now it doesn't do much but... it will soon!
 Current features:
 + Can print to the VGA buffer (in 255 different colors!)
 + Simple PS/2 keyboard driver
+ + with multiple keyboard maps
 + Simple memory frame allocation (but no deallocation)
 + **More to come**
 
