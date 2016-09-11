@@ -20,7 +20,9 @@ version = "0.7.1"
 default-features = false
 
 [dependencies.multiboot2]
-git = "https://github.com/phil-opp/multiboot2-elf64"
+# TODO replace this when phil merges
+# git = "https://github.com/phil-opp/multiboot2-elf64"
+git = "https://github.com/4e554c4c/multiboot2-elf64"
 
 # Dev profile, `cargo build`.
 [profile.dev]

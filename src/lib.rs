@@ -84,8 +84,17 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) {
     // Initialize the IDT
     interrupts::init();
 
+    let module = boot_info.module_tag().unwrap();
+    if module.name() == "keyboard" {
+        unsafe {
+            interrupts::KEYBOARD.lock()
+                .change_kbmap(&*(module.start_address() as u64 as *const [u8; 128]));
+        }
+    }
+
     println!("Try to write some things!");
-    vga_buffer::WRITER.lock().color(vga_buffer::Color::White, vga_buffer::Color::Black);
+    vga_buffer::WRITER.lock()
+        .color(vga_buffer::Color::White, vga_buffer::Color::Black);
 
     loop {}
 }

@@ -116,7 +116,7 @@ pub extern "C" fn rust_keyboard_interrupt_handler() {
         // then the top bit of it is set
         x if x & 0x80 == 0 => {
             kb.keys[x as usize] = true;
-            let mut byte = kb.kbmap[x as usize] as u8;
+            let mut byte = kb.kbmap[x as usize];
 
             // If either shift is pressed, make it
             // capital as long as it is alphabetic

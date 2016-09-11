@@ -12,6 +12,7 @@ target ?= $(arch)-unknown-none-gnu
 rust_os := target/$(target)/debug/lib$(name).a
 kernel := build/kernel-$(arch).bin
 iso := build/os-$(arch).iso
+module := src/arch/$(arch)/module
 
 linker_script := src/arch/$(arch)/linker.ld
 grub_cfg := src/arch/$(arch)/grub.cfg
@@ -41,6 +42,9 @@ endif
 ifeq ($(reboot),no)
 	qflags += --no-reboot
 endif
+ifndef kbmap
+	kbmap := us
+endif
 
 binutils_prefix :=
 
@@ -58,10 +62,11 @@ debug: $(iso)
 
 iso: $(iso)
 
-$(iso): $(kernel) $(grub_cfg)
+$(iso): $(kernel) build/arch/$(arch)/$(kbmap).bin $(grub_cfg)
 	@mkdir -p build/isofiles/boot/grub
 	@cp $(kernel) build/isofiles/boot/kernel.bin
 	@cp $(grub_cfg) build/isofiles/boot/grub
+	@cp build/arch/$(arch)/$(kbmap).bin build/isofiles/boot/keyboard
 	@grub-mkrescue -o $(iso) build/isofiles 2> /dev/null
 	@rm -r build/isofiles
 	
@@ -71,6 +76,9 @@ $(kernel): xargo $(rust_os) $(assembly_object_files) $(linker_script)
 
 xargo:
 	@xargo build --target $(target)
+
+build/arch/$(arch)/$(kbmap).bin: $(module)/keyboard/$(kbmap).asm
+	@nasm $(module)/keyboard/$(kbmap).asm -o build/arch/$(arch)/$(kbmap).bin
 
 # compile assembly files
 build/arch/$(arch)/%.o: src/arch/$(arch)/%.asm
