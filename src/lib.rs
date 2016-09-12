@@ -17,6 +17,8 @@ extern crate multiboot2;
 extern crate x86;
 extern crate bit_field;
 #[macro_use]
+extern crate bitflags;
+#[macro_use]
 extern crate lazy_static;
 
 #[macro_use]

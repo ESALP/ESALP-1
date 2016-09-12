@@ -61,7 +61,7 @@ impl FrameAllocator for AreaFrameAllocator {
         if let Some(area) = self.current_area {
             // "Clone the area to return it if it's free. Frame doesn't
             // implement Clone, but we can construct an identical frame
-            let frame = Frame { number: self.next_free_frame.number };
+            let frame = Frame(self.next_free_frame.0);
 
             // The last frame of the current area
             let current_area_last_frame = {
@@ -74,13 +74,13 @@ impl FrameAllocator for AreaFrameAllocator {
                 self.choose_next_area();
             } else if frame >= self.kernel_start && frame <= self.kernel_end {
                 // 'frame' is used by the kernel
-                self.next_free_frame = Frame { number: self.kernel_end.number + 1 }
+                self.next_free_frame = Frame(self.kernel_end.0 + 1)
             } else if frame >= self.multiboot_start && frame <= self.multiboot_end {
                 // 'frame' is used by the multiboot information structure
-                self.next_free_frame = Frame { number: self.multiboot_end.number + 1 }
+                self.next_free_frame = Fram(self.multiboot_end.0 + 1)
             } else {
                 // frame is unused, increment 'next_free_frame' and return it
-                self.next_free_frame.number += 1;
+                self.next_free_frame.0 += 1;
                 return Some(frame);
             }
             // 'frame' was not valid, try again with the new 'next_free_frame'
