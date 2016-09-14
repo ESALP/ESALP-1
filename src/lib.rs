@@ -8,6 +8,7 @@
 
 #![feature(lang_items)]
 #![feature(const_fn, unique)]
+#![feature(associated_type_defaults)]
 #![feature(asm)]
 #![no_std]
 
@@ -82,6 +83,8 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) {
                                         multiboot_start as usize,
                                         multiboot_end as usize,
                                         memory_map_tag.memory_areas());
+
+    memory::test_paging(&mut frame_allocator);
 
     // Initialize the IDT
     interrupts::init();

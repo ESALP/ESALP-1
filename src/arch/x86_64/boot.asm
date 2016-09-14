@@ -64,6 +64,11 @@ set_up_page_tables:
 	; map each P2 entry to a huge 2MiB page
 	mov ecx, 0x0       ; counter variable
 
+	; Set up recursive paging
+	mov eax, p4_table
+	or eax, 0b11 ; present + writable
+	mov [p4_table + 511 * 8], eax
+
 .map_p2_table:
 	mov eax, 0x200000  ; 2MiB
 	mul ecx            ; start address of ecx-th page
@@ -209,7 +214,7 @@ p2_table:
 ; undefined behavior.
 align 16
 stack_bottom:
-	resb 4096
+	resb 4096 * 2
 stack_top:
 
 section .rodata

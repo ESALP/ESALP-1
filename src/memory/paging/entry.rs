@@ -20,7 +20,7 @@ impl Entry {
     }
 
     pub fn flags(&self) -> EntryFlags {
-        EntryFlags::from_bits_trunicate(self.0)
+        EntryFlags::from_bits_truncate(self.0)
     }
 
     pub fn pointed_frame(&self) -> Option<Frame> {
@@ -32,7 +32,11 @@ impl Entry {
             None
         }
     }
-    // TODO finish blog post
+
+    pub fn set(&mut self, frame: Frame, flags: EntryFlags) {
+        assert!(frame.start_address() & !0x000fffff_fffff000 == 0);
+        self.0 = (frame.start_address() as u64) | flags.bits();
+    }
 }
 
 bitflags! {

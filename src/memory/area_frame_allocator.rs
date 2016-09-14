@@ -77,7 +77,7 @@ impl FrameAllocator for AreaFrameAllocator {
                 self.next_free_frame = Frame(self.kernel_end.0 + 1)
             } else if frame >= self.multiboot_start && frame <= self.multiboot_end {
                 // 'frame' is used by the multiboot information structure
-                self.next_free_frame = Fram(self.multiboot_end.0 + 1)
+                self.next_free_frame = Frame(self.multiboot_end.0 + 1)
             } else {
                 // frame is unused, increment 'next_free_frame' and return it
                 self.next_free_frame.0 += 1;
@@ -89,8 +89,8 @@ impl FrameAllocator for AreaFrameAllocator {
             None // no free frames
         }
     }
-    fn deallocate_frame(&mut self) {
-        // TODO
+    fn deallocate_frame(&mut self, frame: Frame) {
+        // TODO implement
         unimplemented!();
     }
 }
