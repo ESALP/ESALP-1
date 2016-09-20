@@ -9,7 +9,7 @@
 #![allow(dead_code,unused_variables)]
 
 pub use self::area_frame_allocator::AreaFrameAllocator;
-pub use self::paging::test_paging;
+pub use self::paging::{test_paging, remap_the_kernel};
 use self::paging::PhysicalAddress;
 
 mod area_frame_allocator;
@@ -27,6 +27,35 @@ impl Frame {
 
     fn start_address(&self) -> PhysicalAddress {
         self.0 * PAGE_SIZE
+    }
+
+    fn clone(&self) -> Frame {
+        Frame(self.0)
+    }
+
+    fn range_inclusive(start: Frame, end: Frame) -> FrameIter {
+        FrameIter{
+            start: start,
+            end: end,
+        }
+    }
+}
+
+struct FrameIter {
+    start: Frame,
+    end: Frame,
+}
+
+impl Iterator for FrameIter {
+    type Item = Frame;
+
+    fn next(&mut self) -> Option<Frame> {
+        if self.start <= self.end {
+            let frame = self.start.clone();
+            self.start.0 += 1;
+            return Some(frame);
+        }
+        None
     }
 }
 

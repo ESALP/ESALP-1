@@ -27,7 +27,9 @@ pub struct Table<L: TableLevel> {
     level: PhantomData<L>,
 }
 
-impl<L> Table<L> where L: TableLevel {
+impl<L> Table<L>
+    where L: TableLevel
+{
     pub fn zero(&mut self) {
         for entry in self.entries.iter_mut() {
             entry.set_unused();
@@ -35,7 +37,9 @@ impl<L> Table<L> where L: TableLevel {
     }
 }
 
-impl<L> Table<L> where L: HierarchicalLevel {
+impl<L> Table<L>
+    where L: HierarchicalLevel
+{
     pub fn next_table(&self, index: usize) -> Option<&Table<L::NextLevel>> {
         self.next_table_address(index)
             .map(|address|unsafe { &*(address as *const _) })

@@ -9,7 +9,7 @@ crate-type = ["staticlib"]
 [dependencies]
 rlibc = "0.1.4"
 spin = "0.3.4"
-#FIXME fix this pls
+#FIXME two diff bit crates?
 bit_field = "0.4.0"
 bitflags = "0.7.0"
 
