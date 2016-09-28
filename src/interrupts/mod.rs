@@ -1,5 +1,6 @@
-// Copyright 2016 JJ Garzella and Calvin Lee. See the README.md
-// file at the top-level directory of this distribution.
+// Copyright 2016 Phillip Oppermann, Calvin Lee and JJ Garzella.
+// See the README.md file at the top-level directory of this
+// distribution.
 //
 // Licensed under the MIT license <LICENSE or
 // http://opensource.org/licenses/MIT>, at your option.
