@@ -1,0 +1,11 @@
+[package]
+authors = ["Calvin Lee <cyrus296@gmail.com>"]
+name = "hole_list_allocator"
+version = "0.1.0"
+
+[dependencies]
+spin = "0.3.4"
+lazy_static = "0.2.1"
+linked_list_allocator = "0.2.2"
+
+[workspace]

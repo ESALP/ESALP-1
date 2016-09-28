@@ -5,10 +5,7 @@
 ; http://opensource.org/licenses/MIT>, at your option.
 ; This file may not be copied, modified, or distributed
 ; except according to those terms.
-extern KEXIT
-extern rust_de_interrupt_handler
-extern rust_pf_interrupt_handler
-extern rust_keyboard_interrupt_handler
+extern rust_irq_handler
 
 section .text
 bits 64
@@ -39,33 +36,40 @@ bits 64
 	pop rax
 %endmacro
 
-global sti
-sti:
-	sti
-	ret
-
-global irq0
-irq0:
-	; de does not have an error code
-	push qword 0
-
-	mov rdi, rsp
-	; Call a Rust function.
-	call rust_de_interrupt_handler
-
-global irqE
-irqE:
-	mov rdi, rsp
-	; Call a Rust function.
-	call rust_pf_interrupt_handler
-
-global irq21
-irq21:
+%macro isr 1
+global isr%1
+isr%1:
 	pushall
-
-	; Call a Rust function.
-	call rust_keyboard_interrupt_handler
-
+	mov rdi, rsp
+	add rdi, 72 ; Account for the pushed registers
+	mov rsi, %1
+	call irq_common
 	popall
-
+	add rsp, 8 ; Pop the error code
 	iretq
+%endmacro
+
+%macro isr_noerr 1
+global isr%1
+isr%1:
+	push qword 0 ; Push faux error code
+	pushall
+	mov rdi, rsp
+	add rdi, 72 ; Account for the pushed registers
+	mov rsi, %1
+	call irq_common
+	popall
+	add rsp, 8 ; Pop the error code
+	iretq
+%endmacro
+
+isr_noerr 0
+
+isr_noerr 3
+isr 13
+isr 14
+isr_noerr 33
+
+irq_common:
+	call rust_irq_handler
+	ret

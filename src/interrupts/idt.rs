@@ -14,7 +14,7 @@ pub type HandlerFunc = unsafe extern "C" fn();
 pub struct Idt([Entry; 40]);
 
 impl Idt {
-    pub fn new() -> Self {
+    pub fn new() -> Idt {
         Idt([Entry::missing(); 40])
     }
 

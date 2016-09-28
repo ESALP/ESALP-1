@@ -8,7 +8,11 @@
 
 #![allow(dead_code)]
 
+use core::fmt;
+
 use spin::Mutex;
+
+use vga_buffer::print_error;
 use self::pic::ChainedPICs;
 pub use self::keyboard::KEYBOARD;
 
@@ -18,9 +22,11 @@ mod pic;
 mod idt;
 
 extern "C" {
-    fn irq0();
-    fn irqE();
-    fn irq21();
+    fn isr0();
+    fn isr3();
+    fn isr13();
+    fn isr14();
+    fn isr33();
     fn sti();
     fn KEXIT();
 }
@@ -30,9 +36,10 @@ lazy_static! {
         let mut idt = idt::Idt::new();
 
         // Initialize handlers
-        idt.set_handler(0x0,irq0);
-        idt.set_handler(0xE,irqE);
-        idt.set_handler(0x21,irq21);
+        idt.set_handler(0x0, isr0 );
+        idt.set_handler(0x3, isr3 );
+        idt.set_handler(0xE, isr14);
+        idt.set_handler(0x21,isr33);
         idt
     };
 }
@@ -51,15 +58,31 @@ pub fn init() {
     }
 }
 
-#[derive(Debug)]
 #[repr(C)]
 pub struct ExceptionStackFrame {
+    error_code: u64,
     instruction_pointer: u64,
     code_segment: u64,
     cpu_flags: u64,
     stack_pointer: u64,
     stack_segment: u64,
-    error_code: u64,
+}
+
+impl fmt::Debug for ExceptionStackFrame {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, r#"
+ExceptionStackFrame {{
+    Instruction Pointer: 0x{:04x}:{:0al$x},
+    Stack Pointer:       0x{:04x}:{:0al$x},
+    Flags:               0b{:0fl$b},
+    Error Code:          0b{:0fl$b},
+}}"#,   self.code_segment, self.instruction_pointer,
+        self.stack_segment,self.stack_pointer,
+        self.cpu_flags, self.error_code,
+        // TODO maybe adjust this dynamically?
+        al = 16,
+        fl = 16)
+    }
 }
 
 //  Exceptions:
@@ -73,8 +96,8 @@ pub struct ExceptionStackFrame {
 //  | Bound Range Exceeded          | 5  (0x5)   | Fault       | #BR        | No            |
 //  | Invalid Opcode                | 6  (0x6)   | Fault       | #UD        | No            |
 //  | Device not Availible          | 7  (0x7)   | Fault       | #NM        | No            |
-//  | Double Fault                  | 8  (0x5)   | Abort       | #DF        | No            |
-//  | ~Coprocessor Segment Overrun~ | 9  (0x8)   | Fault       | -          | No            |
+//  | Double Fault                  | 8  (0x8)   | Abort       | #DF        | No            |
+//  | ~Coprocessor Segment Overrun~ | 9  (0x9)   | Fault       | -          | No            |
 //  | Invalid TSS                   | 10 (0xA)   | Fault       | #TS        | Yes           |
 //  | Segment not Present           | 11 (0xB)   | Fault       | #NP        | Yes           |
 //  | Stack-Segment Fault           | 12 (0xC)   | Fault       | #SS        | Yes           |
@@ -94,20 +117,45 @@ pub struct ExceptionStackFrame {
 //  | ----------------------------- | ---------- | ----------- | ---------- | ------------- |
 
 #[no_mangle]
-pub extern "C" fn rust_de_interrupt_handler(stack_frame: *const ExceptionStackFrame) {
+pub extern "C" fn rust_irq_handler(stack_frame: *const ExceptionStackFrame,
+                                   isr_number: usize) {
+    match isr_number {
+        0x0 => rust_de_handler(stack_frame),
+        0x3 => breakpoint_handler(stack_frame),
+        0xD => rust_gp_handler(stack_frame),
+        0xE => rust_pf_handler(stack_frame),
+        0x21=> rust_kb_handler(),
+        _   => unreachable!(),
+    }
+}
+
+extern "C" fn rust_de_handler(stack_frame: *const ExceptionStackFrame) {
     unsafe {
         panic!("EXCEPTION DIVIDE BY ZERO\n{:#?}", *stack_frame);
     }
 }
-#[no_mangle]
-pub extern "C" fn rust_pf_interrupt_handler(stack_frame: *const ExceptionStackFrame) {
+
+extern "C" fn breakpoint_handler(stack_frame: *const ExceptionStackFrame) {
+    unsafe {
+        print_error(format_args!("Breakpoint at {:#?}\n{:#?}",
+                                   (*stack_frame).instruction_pointer,
+                                   *stack_frame));
+    }
+}
+
+extern "C" fn rust_gp_handler(stack_frame: *const ExceptionStackFrame) {
+    unsafe {
+        panic!("EXCEPTION GENERAL PROTECTION FAULT\n{:#?}", *stack_frame);
+    }
+}
+
+extern "C" fn rust_pf_handler(stack_frame: *const ExceptionStackFrame) {
     unsafe {
         panic!("EXCEPTION PAGE FAULT\n{:#?}", *stack_frame);
     }
 }
 
-#[no_mangle]
-pub extern "C" fn rust_keyboard_interrupt_handler() {
+extern "C" fn rust_kb_handler() {
     use vga_buffer::WRITER;
 
     let mut kb = KEYBOARD.lock();

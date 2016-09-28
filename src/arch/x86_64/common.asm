@@ -56,13 +56,17 @@ outl:
 	out dx, eax
 	ret
 
+; STI instruction that can
+; be linked from Rust
+global sti
+sti:
+	sti
+	ret
+
 ; Error puts function for long mode, if we
 ; ever need to extend the file to need it
 ; result: printf("ERROR: %s",rdi);
 global eputs
-; Regular puts, is called with a pointer
-; to a string and a color byte.
-global puts
 eputs:
 	;0x04, red on black.
 	mov rax, 0x044F045204520445
@@ -72,6 +76,9 @@ eputs:
 	;prepare to "call" puts
 	mov si, 0x04
 	push KEXIT ;Makes puts ret to KEXIT
+; Regular puts, is called with a pointer
+; to a string and a color byte.
+global puts
 puts:
 	mov rcx, 0xb800e
 	mov dx, si
@@ -90,5 +97,4 @@ puts:
 	inc rdi
 	jmp .loop
 .end:
-	xor eax, eax
 	ret

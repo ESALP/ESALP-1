@@ -1,0 +1,9 @@
+[package]
+authors = ["Calvin Lee <cyrus296@gmail.com>"]
+name = "bump_alloc"
+version = "0.1.0"
+
+[dependencies]
+spin = "0.3.4"
+
+[workspace]

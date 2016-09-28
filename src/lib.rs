@@ -7,24 +7,37 @@
 // except according to those terms.
 
 #![feature(lang_items)]
+#![feature(alloc, collections)]
 #![feature(const_fn, unique)]
+#![feature(core_intrinsics)]
 #![feature(associated_type_defaults)]
-#![feature(asm)]
+#![feature(naked_functions, asm)]
 #![no_std]
 
+// crates.io crates
 extern crate rlibc;
 extern crate spin;
 extern crate multiboot2;
+#[macro_use]
 extern crate x86;
 extern crate bit_field;
 #[macro_use]
 extern crate bitflags;
 #[macro_use]
 extern crate lazy_static;
+#[macro_use]
+extern crate once;
+
+// Features involving allocation
+extern crate hole_list_allocator;
+extern crate alloc;
+#[macro_use]
+extern crate collections;
 
 #[macro_use]
 mod vga_buffer;
 mod memory;
+// This must be pub to expose functions to the linker
 pub mod interrupts;
 
 extern "C" {
@@ -36,24 +49,12 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) {
     vga_buffer::clear_screen();
     println!("Hello Rust log \x01");
 
+    enable_nxe_bit();
+    enable_write_protected_bit();
+
     let boot_info = unsafe {
         multiboot2::load(multiboot_info_address)
     };
-    let memory_map_tag = boot_info.memory_map_tag()
-        .expect("Memory map tag required");
-    let elf_sections_tag = boot_info.elf_sections_tag()
-        .expect("Elf-sections tag required");
-
-    let kernel_start = elf_sections_tag.sections()
-        .map(|s| s.addr)
-        .min()
-        .unwrap();
-    let kernel_end = elf_sections_tag.sections()
-        .map(|s| s.addr + s.size)
-        .max()
-        .unwrap();
-    let multiboot_start = multiboot_info_address;
-    let multiboot_end = multiboot_start + (boot_info.total_size as usize);
 
     for module in boot_info.module_tags() {
         if module.name() == "keyboard" {
@@ -64,20 +65,15 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) {
         }
     }
 
-    enable_nxe_bit();
-
-    // now create an allocator for memory
-    let mut frame_allocator =
-        memory::AreaFrameAllocator::new(kernel_start as usize,
-                                        kernel_end as usize,
-                                        multiboot_start as usize,
-                                        multiboot_end as usize,
-                                        memory_map_tag.memory_areas());
-
-    memory::remap_the_kernel(&mut frame_allocator, boot_info);
-
     // Initialize the IDT
     interrupts::init();
+
+    // Initialize memory
+    memory::init(&boot_info);
+
+    // Test allocation
+    use alloc::boxed::Box;
+    let heap_test = Box::new(42);
 
     println!("Try to write some things!");
     vga_buffer::WRITER.lock()
@@ -95,6 +91,15 @@ fn enable_nxe_bit() {
         let efer = rdmsr(IA32_EFER);
         wrmsr(IA32_EFER, efer | nxe_bit);
     }
+}
+
+/// Enable the `WRITABLE` bit, it is ignored by default
+fn enable_write_protected_bit() {
+    use x86::controlregs::{cr0, cr0_write};
+
+    let wp_bit = 1 << 16;
+
+    unsafe { cr0_write(cr0() | wp_bit) }
 }
 
 #[allow(non_snake_case)]

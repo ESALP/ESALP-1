@@ -26,10 +26,11 @@ pub type PhysicalAddress = usize;
 pub type VirtualAddress = usize;
 
 #[derive(Debug, Copy, Clone)]
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
 pub struct Page(usize);
 
 impl Page {
-    fn start_address(&self) -> usize {
+    pub fn start_address(&self) -> usize {
         self.0 * PAGE_SIZE
     }
 
@@ -54,6 +55,32 @@ impl Page {
 
     fn p1_index(&self) -> usize {
         (self.0 >>  0) & 0o777
+    }
+
+    pub fn range_inclusive(start: Page, end: Page) -> PageIter {
+        PageIter {
+            start: start,
+            end: end,
+        }
+    }
+}
+
+pub struct PageIter {
+    start: Page,
+    end: Page,
+}
+
+impl Iterator for PageIter {
+    type Item = Page;
+
+    fn next(&mut self) -> Option<Page> {
+        if self.start <= self.end {
+            let page = self.start;
+            self.start.0 += 1;
+            Some(page)
+        } else {
+            None
+        }
     }
 }
 
@@ -161,6 +188,7 @@ impl InactivePageTable {
 }
 
 pub fn remap_the_kernel<A>(allocator: &mut A, boot_info: &BootInformation)
+    -> ActivePageTable
     where A: FrameAllocator
 {
     // Create temporary page at arbritrary unused page address
@@ -179,15 +207,12 @@ pub fn remap_the_kernel<A>(allocator: &mut A, boot_info: &BootInformation)
 
         // Identity map the allocated kernel sections
         for (i, section) in elf_sections_tag.sections().enumerate() {
-            println!("section number {}", i);
             if !section.is_allocated() {
                 // Section is not loaded to memory
                 continue;
             }
             assert!(section.addr as usize % PAGE_SIZE == 0,
                     "Section needs to be page aligned");
-            println!("mapping section at addr: {:#x}, size: {:#x}",
-                     section.addr, section.size);
 
             let flags = EntryFlags::from_elf_section_flags(section);
 
@@ -218,7 +243,10 @@ pub fn remap_the_kernel<A>(allocator: &mut A, boot_info: &BootInformation)
     let old_p4_page = Page::containing_address(
         old_table.p4_frame.start_address());
     active_table.unmap(old_p4_page, allocator);
-    println!("New guard page at 0x{:#x}",old_p4_page.start_address());
+
+    println!("New guard page at {:#x}",old_p4_page.start_address());
+
+    active_table
 }
 
 pub fn test_paging<A>(allocator: &mut A)

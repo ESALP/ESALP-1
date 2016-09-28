@@ -1,33 +1,36 @@
 [package]
+authors = ["JJ Garzella <jjgarzella@gmail.com>", "Calvin Lee <cyrus296@gmail.com>"]
 name = "ESALP"
 version = "0.1.0"
-authors = ["JJ Garzella <jjgarzella@gmail.com>","Calvin Lee <cyrus296@gmail.com>"]
-
-[lib]
-crate-type = ["staticlib"]
 
 [dependencies]
-rlibc = "0.1.4"
-spin = "0.3.4"
-#FIXME two diff bit crates?
 bit_field = "0.4.0"
 bitflags = "0.7.0"
+once = "0.3.2"
+rlibc = "0.1.4"
+spin = "0.3.4"
+
+[dependencies.hole_list_allocator]
+path = "libs/hole_list_allocator"
 
 [dependencies.lazy_static]
-version = "0.2.1"
 features = ["spin_no_std"]
-
-[dependencies.x86]
-version = "0.7.1"
-default-features = false
+version = "0.2.1"
 
 [dependencies.multiboot2]
 git = "https://github.com/phil-opp/multiboot2-elf64"
 
-# Dev profile, `cargo build`.
+[dependencies.x86]
+default-features = false
+version = "0.7.1"
+
+[lib]
+crate-type = ["staticlib"]
+
+[profile]
+
 [profile.dev]
 panic = "abort"
 
-# Release profile `cargo build --release`.
 [profile.release]
 panic = "abort"

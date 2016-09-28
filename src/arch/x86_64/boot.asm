@@ -67,13 +67,13 @@ set_up_page_tables:
 	; Set up recursive paging
 	mov eax, p4_table
 	or eax, 0b11 ; present + writable
-	mov [p4_table + 511 * 8], eax
+	mov [p4_table + (511 * 8)], eax
 
 .map_p2_table:
 	mov eax, 0x200000  ; 2MiB
 	mul ecx            ; start address of ecx-th page
 	or eax, 0b10000011 ; present + writable + huge
-	mov [p2_table + ecx * 8], eax ; map ecx-th entry
+	mov [p2_table + (ecx * 8)], eax ; map ecx-th entry
 
 	inc ecx            ; increase counter
 	cmp ecx, 512       ; if counter == 512, the whole P2 table is mapped
