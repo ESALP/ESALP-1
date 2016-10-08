@@ -272,6 +272,9 @@ start_high:
 	call puts
 	pop rdi
 
+	; Give rust the higher half address to the
+	; multiboot2 information structure
+	add rdi, KERNEL_BASE
 	; call Rust
 	call rust_main
 

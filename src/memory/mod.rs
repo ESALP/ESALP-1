@@ -18,6 +18,7 @@ use self::paging::PhysicalAddress;
 mod area_frame_allocator;
 mod paging;
 
+pub const KERNEL_BASE: usize = 0xFFFF_FFFF_8000_0000;
 pub const PAGE_SIZE: usize = 4096;
 
 pub fn init(boot_info: &BootInformation) {
