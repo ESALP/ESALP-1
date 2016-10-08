@@ -21,6 +21,8 @@ use memory::FrameAllocator;
 use core::marker::PhantomData;
 use core::ops::{Index, IndexMut};
 
+// FIXME INCORRECT TABLE ADDRESS
+//       SHOULD BE ENTRY #510
 pub const P4: *mut Table<Level4> = 0xffffffff_fffff000 as *mut _;
 
 pub struct Table<L: TableLevel> {

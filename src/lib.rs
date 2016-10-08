@@ -50,48 +50,33 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) {
     vga_buffer::clear_screen();
     println!("Hello Rust log \x01");
 
-    enable_nxe_bit();
     enable_write_protected_bit();
 
-    let boot_info = unsafe {
-        multiboot2::load(multiboot_info_address)
-    };
+    // let boot_info = unsafe {
+    //     multiboot2::load(multiboot_info_address)
+    // };
 
-    for module in boot_info.module_tags() {
-        if module.name() == "keyboard" {
-            unsafe {
-                interrupts::KEYBOARD.lock()
-                    .change_kbmap(&*(module.start_address() as u64 as *const [u8; 128]));
-            }
-        }
-    }
+    // for module in boot_info.module_tags() {
+    //     if module.name() == "keyboard" {
+    //         unsafe {
+    //             interrupts::KEYBOARD.lock()
+    //                 .change_kbmap(&*(module.start_address() as u64 as *const [u8; 128]));
+    //         }
+    //     }
+    // }
 
     // Initialize the IDT
     interrupts::init();
 
-    // Initialize memory
-    memory::init(&boot_info);
+    // // Initialize memory
+    // memory::init(&boot_info);
 
     // Test allocation
-    use alloc::boxed::Box;
-    let heap_test = Box::new(42);
-
     println!("Try to write some things!");
     vga_buffer::WRITER.lock()
         .color(vga_buffer::Color::White, vga_buffer::Color::Black);
 
     loop {}
-}
-
-/// Enable the NXE bit in the CPU Extended Feature Register
-fn enable_nxe_bit() {
-    use x86::msr::{IA32_EFER,rdmsr, wrmsr};
-
-    let nxe_bit = 1 << 11;
-    unsafe {
-        let efer = rdmsr(IA32_EFER);
-        wrmsr(IA32_EFER, efer | nxe_bit);
-    }
 }
 
 /// Enable the `WRITABLE` bit, it is ignored by default
