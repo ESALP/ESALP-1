@@ -25,7 +25,7 @@ Current features:
 1. Use `make all` to build ESALP
 2. `make run` and you're done!
 
-#Notes:
+###Notes:
 + If your system binutils is not x86_64-elf format, you need to cross-compile binutils. By adding `cross=yes` to both make commands, the prefix `x86_64-elf-` will be added to all binutils commands.
 + `int=yes` prints out the registers on an interrupt and `reboot=no` stops qemu from rebooting. If you're stuck in an infinite reboot loop, `make run int=yes reboot=no` could be helpful
 + If kvm is your thing, run with `kvm=yes`
