@@ -70,7 +70,9 @@ isr_noerr 0
 isr_noerr 3
 isr 13
 isr 14
+isr_noerr 32
 isr_noerr 33
+
 
 irq_common:
 	call rust_irq_handler

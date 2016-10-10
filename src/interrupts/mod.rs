@@ -27,6 +27,7 @@ extern "C" {
     fn isr3();
     fn isr13();
     fn isr14();
+    fn isr32();
     fn isr33();
     fn sti();
     fn KEXIT();
@@ -39,7 +40,9 @@ lazy_static! {
         // Initialize handlers
         idt.set_handler(0x0, isr0 );
         idt.set_handler(0x3, isr3 );
+        idt.set_handler(0xD, isr13);
         idt.set_handler(0xE, isr14);
+        idt.set_handler(0x20,isr32);
         idt.set_handler(0x21,isr33);
         idt
     };
@@ -120,12 +123,14 @@ ExceptionStackFrame {{
 #[no_mangle]
 pub extern "C" fn rust_irq_handler(stack_frame: *const ExceptionStackFrame,
                                    isr_number: usize) {
-    match isr_number {
+//    panic!("REACHED RUST");
+	match isr_number {
         0x0 => rust_de_handler(stack_frame),
         0x3 => breakpoint_handler(stack_frame),
         0xD => rust_gp_handler(stack_frame),
         0xE => rust_pf_handler(stack_frame),
-        0x21=> rust_kb_handler(),
+        0x20 => rust_timer_handler(),
+        0x21 => rust_kb_handler(),
         _   => unreachable!(),
     }
 }
@@ -156,10 +161,17 @@ extern "C" fn rust_pf_handler(stack_frame: *const ExceptionStackFrame) {
     }
 }
 
+extern "C" fn rust_timer_handler() {
+	// print to the screen
+//	use vga_buffer::WRITER;
+//	WRITER.lock().write_str("TIME"); // debugging
+//	panic!("REACHED HANDLER");
+}
+
 extern "C" fn rust_kb_handler() {
     use vga_buffer::WRITER;
-
     let mut kb = KEYBOARD.lock();
+//    panic!("KEYBOARD");
     match kb.port.read() {
         // If the key was just pressed,
         // then the top bit of it is set
