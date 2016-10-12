@@ -59,7 +59,6 @@ SECTIONS {
 	.data.rel.ro ALIGN(4K) : AT(ADDR(.data.rel.ro) - KERNEL_BASE)
 	{
 		*(.data.rel.ro.local*) *(.data.rel.ro .data.rel.ro.*)
-		. = ALIGN(4K);
 	}
 
 	.gcc_except_table ALIGN(4K) : AT(ADDR(.gcc_except_table) - KERNEL_BASE)

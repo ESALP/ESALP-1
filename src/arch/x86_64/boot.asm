@@ -110,7 +110,7 @@ set_up_page_tables:
 	mov [(megabyte_table - KERNEL_BASE) + (ecx * 8)], eax ; map ecx-th entry
 
 	inc ecx            ; increase counter
-	cmp ecx, 256       ; if counter = 512, the whole megabyte is mapped
+	cmp ecx, 256       ; if counter = 256, the whole megabyte is mapped
 	jne .map_megabyte_table ; else map the next entry
 
 	ret

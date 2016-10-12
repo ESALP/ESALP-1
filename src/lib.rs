@@ -10,7 +10,6 @@
 #![feature(lang_items)]
 #![feature(alloc, collections)]
 #![feature(const_fn, unique)]
-#![feature(core_intrinsics)]
 #![feature(associated_type_defaults)]
 #![feature(asm)]
 #![no_std]
@@ -67,8 +66,8 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) {
     // Initialize the IDT
     interrupts::init();
 
-    // // Initialize memory
-    // memory::init(&boot_info);
+    // Initialize memory
+    memory::init(&boot_info);
 
     println!("Try to write some things!");
     vga_buffer::WRITER.lock()
