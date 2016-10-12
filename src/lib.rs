@@ -10,9 +10,8 @@
 #![feature(lang_items)]
 #![feature(alloc, collections)]
 #![feature(const_fn, unique)]
-#![feature(core_intrinsics)]
 #![feature(associated_type_defaults)]
-#![feature(naked_functions, asm)]
+#![feature(asm)]
 #![no_std]
 
 // crates.io crates
@@ -50,18 +49,16 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) {
     vga_buffer::clear_screen();
     println!("Hello Rust log \x01");
 
-    enable_nxe_bit();
-    enable_write_protected_bit();
-
     let boot_info = unsafe {
         multiboot2::load(multiboot_info_address)
     };
 
     for module in boot_info.module_tags() {
         if module.name() == "keyboard" {
+            let addr = module.start_address() as usize + memory::KERNEL_BASE;
             unsafe {
                 interrupts::KEYBOARD.lock()
-                    .change_kbmap(&*(module.start_address() as u64 as *const [u8; 128]));
+                    .change_kbmap(&*(addr as *const [u8; 128]));
             }
         }
     }
@@ -72,35 +69,11 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) {
     // Initialize memory
     memory::init(&boot_info);
 
-    // Test allocation
-    use alloc::boxed::Box;
-    let heap_test = Box::new(42);
-
     println!("Try to write some things!");
     vga_buffer::WRITER.lock()
         .color(vga_buffer::Color::White, vga_buffer::Color::Black);
 
     loop {}
-}
-
-/// Enable the NXE bit in the CPU Extended Feature Register
-fn enable_nxe_bit() {
-    use x86::msr::{IA32_EFER,rdmsr, wrmsr};
-
-    let nxe_bit = 1 << 11;
-    unsafe {
-        let efer = rdmsr(IA32_EFER);
-        wrmsr(IA32_EFER, efer | nxe_bit);
-    }
-}
-
-/// Enable the `WRITABLE` bit, it is ignored by default
-fn enable_write_protected_bit() {
-    use x86::controlregs::{cr0, cr0_write};
-
-    let wp_bit = 1 << 16;
-
-    unsafe { cr0_write(cr0() | wp_bit) }
 }
 
 #[allow(non_snake_case)]

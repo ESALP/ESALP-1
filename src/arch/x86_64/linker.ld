@@ -9,63 +9,60 @@
 */
 
 ENTRY(start)
+OUTPUT_FORMAT(elf64-x86-64)
+
+KERNEL_BASE = 0xFFFFFFFF80000000;
 
 SECTIONS {
+
 	. = 1M;
 
-	/* .rodata is at the beginning because we don't want to
-	 * waste 4k on just a few bytes. This will _have_ to change
-	 * when switching to a higher half kernel because the header
-	 * and boot code will have to be in one section, while rust
-	 * code/data is in the rest.
-	 */
-	.rodata :
+	.init ALIGN(4K) :
 	{
-		/* ensure multiboot header will be at the beginning */
 		KEEP(*(.multiboot_header))
-		*(.rodata .rodata.*)
-		. = ALIGN(4K);
+		*(.init .init.*)
 	}
 
-	.text :
+	. += KERNEL_BASE;
+
+	.text ALIGN(4K) : AT(ADDR(.text) - KERNEL_BASE)
 	{
 		*(.text .text.*)
-		. = ALIGN(4K);
 	}
 
-	.data :
+	.data ALIGN(4K) : AT(ADDR(.data) - KERNEL_BASE)
 	{
+		*(.padata)
 		*(.data .data.* )
-		. = ALIGN(4K);
 	}
 
-	.bss :
+	.bss ALIGN(4K) : AT(ADDR(.bss) - KERNEL_BASE)
 	{
 		*(.bss .bss.*)
-		. = ALIGN(4K);
 	}
 
-	.got :
+	.rodata ALIGN(4K) : AT(ADDR(.rodata) - KERNEL_BASE)
+	{
+		*(.rodata .rodata.*)
+	}
+
+	.got ALIGN(4K) : AT(ADDR(.got) - KERNEL_BASE)
 	{
 		*(.got)
-		. = ALIGN(4K);
 	}
 
-	.got.plt :
+	.got.plt ALIGN(4K) : AT(ADDR(.got.plt) - KERNEL_BASE)
 	{
 		*(.got.plt)
-		. = ALIGN(4K);
 	}
 
-	.data.rel.ro : ALIGN(4K)
+	.data.rel.ro ALIGN(4K) : AT(ADDR(.data.rel.ro) - KERNEL_BASE)
 	{
 		*(.data.rel.ro.local*) *(.data.rel.ro .data.rel.ro.*)
-		. = ALIGN(4K);
 	}
 
-	.gcc_except_table : ALIGN(4K)
+	.gcc_except_table ALIGN(4K) : AT(ADDR(.gcc_except_table) - KERNEL_BASE)
 	{
 		*(.gcc_except_table)
-		. = ALIGN(4K);
 	}
 }

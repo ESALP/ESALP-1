@@ -18,6 +18,7 @@ use self::paging::PhysicalAddress;
 mod area_frame_allocator;
 mod paging;
 
+pub const KERNEL_BASE: usize = 0xFFFF_FFFF_8000_0000;
 pub const PAGE_SIZE: usize = 4096;
 
 pub fn init(boot_info: &BootInformation) {
@@ -30,21 +31,23 @@ pub fn init(boot_info: &BootInformation) {
         .expect("ELF sections tag required");
 
     let kernel_start = elf_sections_tag.sections()
-        .filter(|s| s.is_allocated()).map(|s| s.addr).min().unwrap();
+        .filter(|s| s.is_allocated()).filter(|s| s.start_address() >= KERNEL_BASE)
+        .map(|s| s.start_address() - KERNEL_BASE).min().unwrap();
     let kernel_end = elf_sections_tag.sections()
-        .filter(|s| s.is_allocated()).map(|s| s.addr + s.size).max().unwrap();
+        .filter(|s| s.is_allocated()).filter(|s| s.start_address() >= KERNEL_BASE)
+        .map(|s| s.end_address() - KERNEL_BASE).max().unwrap();
 
-    println!("Kernel start:    {:#x}, Kernel end:    {:#x}",
+    println!("Physical kernel start:    {:#x}, Physical kernel end:    {:#x}",
              kernel_start,
              kernel_end);
-    println!("Multiboot start: {:#x}, Multiboot end: {:#x}",
-             boot_info.start_address(),
-             boot_info.end_address());
+    println!("Physical multiboot start: {:#x}, Physical multiboot end: {:#x}",
+             boot_info.start_address() - KERNEL_BASE,
+             boot_info.end_address() - KERNEL_BASE);
 
     let mut frame_allocator =  AreaFrameAllocator::new(kernel_start as usize,
                                                        kernel_end as usize,
-                                                       boot_info.start_address(),
-                                                       boot_info.end_address(),
+                                                       boot_info.start_address() - KERNEL_BASE,
+                                                       boot_info.end_address() - KERNEL_BASE,
                                                        memory_map_tag.memory_areas());
 
     let mut active_table =
