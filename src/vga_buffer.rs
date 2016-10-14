@@ -12,15 +12,20 @@
 use core::ptr::Unique;
 use core::fmt;
 use spin::Mutex;
+use log_buffer::LogBuffer;
+use core::sync::atomic::{ATOMIC_BOOL_INIT, ATOMIC_USIZE_INIT};
+use core::cell::UnsafeCell;
 
 const BUFFER_HEIGHT: usize = 25;
 const BUFFER_WIDTH: usize = 80;
 
-pub static WRITER: Mutex<Writer> = Mutex::new(Writer {
+static WRITER: Mutex<Writer> = Mutex::new(Writer {
     column_position: 0,
     color_code: ColorCode::new(Color::Pink, Color::Black),
     buffer: unsafe { Unique::new(0xb8000 as *mut _) },
 });
+
+pub static WRITE_BUF: LogBuffer<[u8; 32]> = LogBuffer { buffer: UnsafeCell::new([0xff; 32]), position: ATOMIC_USIZE_INIT, lock: ATOMIC_BOOL_INIT };
 
 macro_rules! println {
 	($fmt:expr) => (print!(concat!($fmt, "\n")));
@@ -30,30 +35,38 @@ macro_rules! println {
 macro_rules! print {
 	($($arg:tt)*) => ({
 		use core::fmt::Write;
-		$crate::vga_buffer::WRITER.lock()
-			.write_fmt(format_args!($($arg)*)).unwrap();
+		let mut wb = &($crate::vga_buffer::WRITE_BUF);
+		wb.write_fmt(format_args!($($arg)*)).unwrap();
 	});
 }
 
-pub unsafe fn print_error(fmt: fmt::Arguments) {
-    use core::fmt::Write;
-
-    let mut writer = Writer {
-        column_position: 0,
-        color_code: ColorCode::new(Color::Red, Color::Black),
-        buffer: Unique::new(0xb8000 as *mut _),
-    };
-    writer.new_line();
-    match writer.write_fmt(fmt) {
-        Ok(_) => (),
-        Err(_) => panic!("Failed to write error: {}", fmt),
-    }
-}
+//pub unsafe fn print_error(fmt: fmt::Arguments) {
+//    use core::fmt::Write;
+//
+//    let mut writer = Writer {
+//        column_position: 0,
+//        color_code: ColorCode::new(Color::Red, Color::Black),
+//        buffer: Unique::new(0xb8000 as *mut _),
+//    };
+//    writer.new_line();
+//    match writer.write_fmt(fmt) {
+//        Ok(_) => (),
+//        Err(_) => panic!("Failed to write error: {}", fmt),
+//    }
+//}
 
 pub fn clear_screen() {
     for _ in 0..BUFFER_HEIGHT {
         println!("");
     }
+}
+
+pub fn flush_screen() {
+	WRITER.lock().write_str(WRITE_BUF.extract());
+}
+
+pub fn change_color(fg: Color, bg: Color) {
+	WRITER.lock().color(fg,bg);
 }
 
 #[allow(dead_code)]
@@ -77,14 +90,14 @@ pub enum Color {
     White = 0xf,
 }
 
-pub struct Writer {
+struct Writer {
     column_position: usize,
     color_code: ColorCode,
     buffer: Unique<Buffer>,
 }
 
 impl Writer {
-    pub fn write_byte(&mut self, byte: u8) {
+    fn write_byte(&mut self, byte: u8) {
         match byte {
             b'\0' => (),
             b'\n' => self.new_line(),
@@ -107,13 +120,13 @@ impl Writer {
         }
     }
 
-    pub fn write_str(&mut self, s: &str) {
+    fn write_str(&mut self, s: &str) {
         for byte in s.bytes() {
             self.write_byte(byte);
         }
     }
 
-    pub fn color(&mut self, fg: Color, bg: Color) {
+    fn color(&mut self, fg: Color, bg: Color) {
         self.color_code = ColorCode::new(fg, bg);
     }
 

@@ -13,9 +13,9 @@ use core::fmt;
 
 use spin::Mutex;
 
-use vga_buffer::print_error;
 use self::pic::ChainedPICs;
 pub use self::keyboard::KEYBOARD;
+use vga_buffer;
 
 mod keyboard;
 mod cpuio;
@@ -123,7 +123,6 @@ ExceptionStackFrame {{
 #[no_mangle]
 pub extern "C" fn rust_irq_handler(stack_frame: *const ExceptionStackFrame,
                                    isr_number: usize) {
-//    panic!("REACHED RUST");
 	match isr_number {
         0x0 => rust_de_handler(stack_frame),
         0x3 => breakpoint_handler(stack_frame),
@@ -143,9 +142,9 @@ extern "C" fn rust_de_handler(stack_frame: *const ExceptionStackFrame) {
 
 extern "C" fn breakpoint_handler(stack_frame: *const ExceptionStackFrame) {
     unsafe {
-        print_error(format_args!("Breakpoint at {:#?}\n{:#?}",
+        println!("Breakpoint at {:#?}\n{:#?}",
                                    (*stack_frame).instruction_pointer,
-                                   *stack_frame));
+                                   *stack_frame);
     }
 }
 
@@ -163,13 +162,11 @@ extern "C" fn rust_pf_handler(stack_frame: *const ExceptionStackFrame) {
 
 extern "C" fn rust_timer_handler() {
 	// print to the screen
-//	use vga_buffer::WRITER;
-//	WRITER.lock().write_str("TIME"); // debugging
-//	panic!("REACHED HANDLER");
+    println!("TIME");
+    vga_buffer::flush_screen();
 }
 
 extern "C" fn rust_kb_handler() {
-    use vga_buffer::WRITER;
     let mut kb = KEYBOARD.lock();
 //    panic!("KEYBOARD");
     match kb.port.read() {
@@ -184,7 +181,7 @@ extern "C" fn rust_kb_handler() {
             byte -= 0x20 *
                     ((kb.keys[42] || kb.keys[54]) &&
                       byte > 96 && byte < 123) as u8;
-            WRITER.lock().write_byte(byte);
+            println!("{}",byte);
         }
         // If this runs a key was released
         // load a false into kb.keys at that point

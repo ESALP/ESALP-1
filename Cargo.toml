@@ -20,6 +20,9 @@ version = "0.2.1"
 [dependencies.multiboot2]
 git = "https://github.com/phil-opp/multiboot2-elf64"
 
+[dependencies.log_buffer]
+path = "/Users/jjgarzella/Developer/Languages/Rust/rust-log_buffer"
+
 [dependencies.x86]
 default-features = false
 version = "0.7.1"
