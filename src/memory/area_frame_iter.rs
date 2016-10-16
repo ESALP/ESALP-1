@@ -7,10 +7,10 @@
 // This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use memory::{Frame, FrameAllocator};
+use memory::Frame;
 use multiboot2::{MemoryAreaIter, MemoryArea};
 
-pub struct AreaFrameAllocator {
+pub struct AreaFrameIter {
     next_free_frame: Frame,
     current_area: Option<&'static MemoryArea>,
     areas: MemoryAreaIter,
@@ -20,14 +20,14 @@ pub struct AreaFrameAllocator {
     multiboot_end: Frame,
 }
 
-impl AreaFrameAllocator {
+impl AreaFrameIter {
     pub fn new(kernel_start: usize,
                kernel_end: usize,
                multiboot_start: usize,
                multiboot_end: usize,
                memory_areas: MemoryAreaIter)
-               -> AreaFrameAllocator {
-        let mut allocator = AreaFrameAllocator {
+               -> AreaFrameIter {
+        let mut iter = AreaFrameIter {
             next_free_frame: Frame::containing_address(0),
             current_area: None,
             areas: memory_areas,
@@ -36,8 +36,8 @@ impl AreaFrameAllocator {
             multiboot_start: Frame::containing_address(multiboot_start),
             multiboot_end: Frame::containing_address(multiboot_end),
         };
-        allocator.choose_next_area();
-        allocator
+        iter.choose_next_area();
+        iter
     }
 
     fn choose_next_area(&mut self) {
@@ -57,8 +57,10 @@ impl AreaFrameAllocator {
         }
     }
 }
-impl FrameAllocator for AreaFrameAllocator {
-    fn allocate_frame(&mut self) -> Option<Frame> {
+impl Iterator for AreaFrameIter {
+    type Item = Frame;
+
+    fn next(&mut self) -> Option<Frame> {
         if let Some(area) = self.current_area {
             // "Clone the area to return it if it's free. Frame doesn't
             // implement Clone, but we can construct an identical frame
@@ -85,13 +87,9 @@ impl FrameAllocator for AreaFrameAllocator {
                 return Some(frame);
             }
             // 'frame' was not valid, try again with the new 'next_free_frame'
-            self.allocate_frame()
+            self.next()
         } else {
             None // no free frames
         }
-    }
-    fn deallocate_frame(&mut self, frame: Frame) {
-        // TODO implement
-        unimplemented!();
     }
 }

@@ -105,7 +105,7 @@ impl DerefMut for ActivePageTable {
 }
 
 impl ActivePageTable {
-    unsafe fn new() -> ActivePageTable {
+    pub unsafe fn new() -> ActivePageTable {
         ActivePageTable {
             mapper: Mapper::new(),
         }
@@ -172,7 +172,8 @@ pub struct InactivePageTable {
 }
 
 impl InactivePageTable {
-    pub fn new(frame: Frame, active_table: &mut ActivePageTable,
+    pub fn new(frame: Frame,
+               active_table: &mut ActivePageTable,
                temporary_page: &mut TemporaryPage)
             -> InactivePageTable
     {
@@ -190,19 +191,19 @@ impl InactivePageTable {
     }
 }
 
-pub fn remap_the_kernel<A>(allocator: &mut A, boot_info: &BootInformation)
-    -> ActivePageTable
+pub fn remap_the_kernel<A>(active_table: &mut ActivePageTable,
+                           allocator: &mut A,
+                           boot_info: &BootInformation)
     where A: FrameAllocator
 {
     use memory::KERNEL_BASE;
 
     // Create temporary page at arbritrary unused page address
     let mut temporary_page = TemporaryPage::new(Page(0xdeadbeef), allocator);
-    let mut active_table = unsafe { ActivePageTable::new() };
     let mut new_table = {
         let frame = allocator.allocate_frame()
             .expect("No more frames");
-        InactivePageTable::new(frame, &mut active_table, &mut temporary_page)
+        InactivePageTable::new(frame, active_table, &mut temporary_page)
     };
 
     active_table.with(&mut new_table, &mut temporary_page, |mapper| {
@@ -269,8 +270,6 @@ pub fn remap_the_kernel<A>(allocator: &mut A, boot_info: &BootInformation)
     active_table.unmap(old_p4_page, allocator);
 
     println!("New guard page at {:#x}",old_p4_page.start_address());
-
-    active_table
 }
 
 pub fn test_paging<A>(allocator: &mut A)

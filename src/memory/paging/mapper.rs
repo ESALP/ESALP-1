@@ -139,12 +139,7 @@ impl Mapper {
             ::x86::tlb::flush(page.start_address());
         }
 
-        // HERE BE DRAGONS
-        //
         // TODO Free p(1,2,3) table if empty
-        // TODO impliment deallocate_frame
-        //
-        // FIXME this doesn't work
-        // allocator.deallocate_frame(frame);
+        allocator.deallocate_frame(frame);
     }
 }
