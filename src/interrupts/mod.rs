@@ -55,7 +55,7 @@ pub fn init() {
     unsafe {
         {
             let mut pic = PIC.lock();
-            pic.set_mask(0);
+//            pic.set_mask(0);
             pic.initialize();
         }
         sti();
@@ -162,8 +162,10 @@ extern "C" fn rust_pf_handler(stack_frame: *const ExceptionStackFrame) {
 
 extern "C" fn rust_timer_handler() {
 	// print to the screen
-    println!("TIME");
-    vga_buffer::flush_screen();
+	vga_buffer::flush_screen();
+	unsafe {
+		PIC.lock().master.end_of_interrupt();
+	}
 }
 
 extern "C" fn rust_kb_handler() {

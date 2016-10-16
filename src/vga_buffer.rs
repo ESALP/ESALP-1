@@ -40,6 +40,10 @@ macro_rules! print {
 	});
 }
 
+//pub fn print_debug(s: &str) {
+//	unsafe {print_error(format_args!("{}",s));}
+//}
+
 //pub unsafe fn print_error(fmt: fmt::Arguments) {
 //    use core::fmt::Write;
 //
@@ -63,6 +67,7 @@ pub fn clear_screen() {
 
 pub fn flush_screen() {
 	WRITER.lock().write_str(WRITE_BUF.extract());
+	WRITE_BUF.clear();
 }
 
 pub fn change_color(fg: Color, bg: Color) {
