@@ -5,10 +5,12 @@ rust:
 
 cache: cargo
 
-before_script:
+install:
+    - curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain nightly
+    - source ~/.cargo/env
+    - rustup component add rust-src
     - (cargo install xargo || true)
     - (cargo install rustfmt || true)
-    - PATH=$PATH:~/.cargo/bin
 
 sudo: false
 
