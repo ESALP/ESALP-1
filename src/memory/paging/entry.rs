@@ -28,9 +28,7 @@ impl Entry {
 
     pub fn pointed_frame(&self) -> Option<Frame> {
         if self.flags().contains(PRESENT) {
-            Some(Frame::containing_address(
-                self.0 as usize & 0x000fffff_fffff000
-            ))
+            Some(Frame::containing_address(self.0 as usize & 0x000fffff_fffff000))
         } else {
             None
         }
@@ -59,9 +57,7 @@ bitflags! {
 
 impl EntryFlags {
     pub fn from_elf_section_flags(section: &ElfSection) -> EntryFlags {
-        use multiboot2::{ELF_SECTION_ALLOCATED,
-                         ELF_SECTION_WRITABLE,
-                         ELF_SECTION_EXECUTABLE};
+        use multiboot2::{ELF_SECTION_ALLOCATED, ELF_SECTION_WRITABLE, ELF_SECTION_EXECUTABLE};
 
         let mut flags = EntryFlags::empty();
 

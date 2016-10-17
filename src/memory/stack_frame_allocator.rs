@@ -30,10 +30,11 @@ impl StackFrameAllocator {
         };
         let mut active_table = ACTIVE_TABLE.lock();
 
-        active_table.map_to(Page::containing_address(allocator.stack_base.get() as *const _ as usize),
-                            allocator.frame_iter.next().unwrap(),
-                            memory::paging::WRITABLE,
-                            &mut allocator);
+        active_table.map_to(
+            Page::containing_address(allocator.stack_base.get() as *const _ as usize),
+            allocator.frame_iter.next().unwrap(),
+            memory::paging::WRITABLE,
+            &mut allocator);
 
         allocator
     }
@@ -61,9 +62,7 @@ impl FrameAllocator for StackFrameAllocator {
         // This means that there are frames on the stack and it is
         // not using any pages it shouldn't. Just pop one off and
         // return it.
-        let frame = unsafe {
-            ::core::ptr::read(self.stack_base.offset(self.offset - 1))
-        };
+        let frame = unsafe { ::core::ptr::read(self.stack_base.offset(self.offset - 1)) };
         self.offset -= 1;
 
         Some(frame)

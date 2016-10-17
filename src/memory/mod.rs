@@ -45,11 +45,17 @@ pub fn init(boot_info: &BootInformation) {
         .expect("ELF sections tag required");
 
     let kernel_start = elf_sections_tag.sections()
-        .filter(|s| s.is_allocated()).filter(|s| s.start_address() >= KERNEL_BASE)
-        .map(|s| s.start_address() - KERNEL_BASE).min().unwrap();
+        .filter(|s| s.is_allocated())
+        .filter(|s| s.start_address() >= KERNEL_BASE)
+        .map(|s| s.start_address() - KERNEL_BASE)
+        .min()
+        .unwrap();
     let kernel_end = elf_sections_tag.sections()
-        .filter(|s| s.is_allocated()).filter(|s| s.start_address() >= KERNEL_BASE)
-        .map(|s| s.end_address() - KERNEL_BASE).max().unwrap();
+        .filter(|s| s.is_allocated())
+        .filter(|s| s.start_address() >= KERNEL_BASE)
+        .map(|s| s.end_address() - KERNEL_BASE)
+        .max()
+        .unwrap();
 
     println!("Physical kernel start:    {:#x}, Physical kernel end:    {:#x}",
              kernel_start,
@@ -61,13 +67,14 @@ pub fn init(boot_info: &BootInformation) {
     // TODO Make a static active table
     let mut active_table = unsafe { paging::ActivePageTable::new() };
 
-    let mut frame_allocator = unsafe {
-        StackFrameAllocator::new(AreaFrameIter::new(kernel_start as usize,
-                                                    kernel_end as usize,
-                                                    boot_info.start_address() - KERNEL_BASE,
-                                                    boot_info.end_address() - KERNEL_BASE,
-                                                    memory_map_tag.memory_areas()))
-    };
+    let mut frame_allocator =
+        unsafe {
+            StackFrameAllocator::new(AreaFrameIter::new(kernel_start as usize,
+                                                        kernel_end as usize,
+                                                        boot_info.start_address() - KERNEL_BASE,
+                                                        boot_info.end_address() - KERNEL_BASE,
+                                                        memory_map_tag.memory_areas()))
+        };
 
     paging::remap_the_kernel(&mut active_table, &mut frame_allocator, boot_info);
 
@@ -103,7 +110,7 @@ impl Frame {
     }
 
     fn range_inclusive(start: Frame, end: Frame) -> FrameIter {
-        FrameIter{
+        FrameIter {
             start: start,
             end: end,
         }

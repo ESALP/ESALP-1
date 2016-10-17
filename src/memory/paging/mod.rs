@@ -37,10 +37,10 @@ impl Page {
 
     pub fn containing_address(address: VirtualAddress) -> Page {
         // Address must be canonical
-        assert!(address < 0x0000_8000_0000_0000 ||
-                address >=0xffff_8000_0000_0000,
-                "invalid address: 0x{:x}",address);
-        Page( address / PAGE_SIZE )
+        assert!(address < 0x0000_8000_0000_0000 || address >= 0xffff_8000_0000_0000,
+                "invalid address: 0x{:x}",
+                address);
+        Page(address / PAGE_SIZE)
     }
 
     fn p4_index(&self) -> usize {
@@ -52,11 +52,11 @@ impl Page {
     }
 
     fn p2_index(&self) -> usize {
-        (self.0 >>  9) & 0o777
+        (self.0 >> 9) & 0o777
     }
 
     fn p1_index(&self) -> usize {
-        (self.0 >>  0) & 0o777
+        (self.0 >> 0) & 0o777
     }
 
     pub fn range_inclusive(start: Page, end: Page) -> PageIter {
@@ -106,9 +106,7 @@ impl DerefMut for ActivePageTable {
 
 impl ActivePageTable {
     pub unsafe fn new() -> ActivePageTable {
-        ActivePageTable {
-            mapper: Mapper::new(),
-        }
+        ActivePageTable { mapper: Mapper::new() }
     }
 
     /// Temporarly change the recursive mapping to the given table
@@ -125,12 +123,10 @@ impl ActivePageTable {
 
         {
             // Save table
-            let backup = Frame::containing_address(
-                // Safe iff the processor is in ring 0
-                // during execution. If it's not there
-                // are bigger problems.
-                unsafe { controlregs::cr3() } as usize
-            );
+            let backup = Frame::containing_address(// Safe iff the processor is in ring 0
+                                                   // during execution. If it's not there
+                                                   // are bigger problems.
+                                                   unsafe { controlregs::cr3() } as usize);
 
             // Map temporary_page to the current table
             let p4_table = temporary_page.map_table_frame(backup.clone(), self);
@@ -156,8 +152,7 @@ impl ActivePageTable {
         use x86::controlregs;
 
         let old_table = InactivePageTable {
-            p4_frame: Frame::containing_address(
-                unsafe { controlregs::cr3() } as usize),
+            p4_frame: Frame::containing_address(unsafe { controlregs::cr3() } as usize),
         };
 
         unsafe {
@@ -175,11 +170,9 @@ impl InactivePageTable {
     pub fn new(frame: Frame,
                active_table: &mut ActivePageTable,
                temporary_page: &mut TemporaryPage)
-            -> InactivePageTable
-    {
+               -> InactivePageTable {
         {
-            let table = temporary_page.map_table_frame(frame.clone(),
-                                                       active_table);
+            let table = temporary_page.map_table_frame(frame.clone(), active_table);
             table.zero();
             // Now set up recursive mapping for the table
             table[510].set(frame.clone(), PRESENT | WRITABLE);
@@ -212,8 +205,7 @@ pub fn remap_the_kernel<A>(active_table: &mut ActivePageTable,
             .expect("Memory map tag required");
 
         let string_table = unsafe {
-            &*((elf_sections_tag.string_table() as *const StringTable)
-              .offset(KERNEL_BASE as isize))
+            &*((elf_sections_tag.string_table() as *const StringTable).offset(KERNEL_BASE as isize))
         };
 
         // Map the allocated kernel sections to the higher half
@@ -232,14 +224,11 @@ pub fn remap_the_kernel<A>(active_table: &mut ActivePageTable,
 
             let flags = EntryFlags::from_elf_section_flags(section);
 
-            let start_frame = Frame::containing_address(
-                section.start_address() - KERNEL_BASE);
-            let end_frame = Frame::containing_address(
-                (section.end_address() - KERNEL_BASE) - 2);
+            let start_frame = Frame::containing_address(section.start_address() - KERNEL_BASE);
+            let end_frame = Frame::containing_address((section.end_address() - KERNEL_BASE) - 2);
 
             for frame in Frame::range_inclusive(start_frame, end_frame) {
-                let new_page = Page::containing_address(
-                    frame.start_address() + KERNEL_BASE);
+                let new_page = Page::containing_address(frame.start_address() + KERNEL_BASE);
                 mapper.map_to(new_page, frame, flags, allocator);
             }
         }
@@ -249,14 +238,11 @@ pub fn remap_the_kernel<A>(active_table: &mut ActivePageTable,
         mapper.identity_map(vga_buffer, WRITABLE, allocator);
 
         // Map the multiboot info structure to the higher half
-        let multiboot_start = Frame::containing_address(
-            boot_info.start_address() - KERNEL_BASE);
-        let multiboot_end = Frame::containing_address(
-            (boot_info.end_address() - KERNEL_BASE) - 1);
+        let multiboot_start = Frame::containing_address(boot_info.start_address() - KERNEL_BASE);
+        let multiboot_end = Frame::containing_address((boot_info.end_address() - KERNEL_BASE) - 1);
 
         for frame in Frame::range_inclusive(multiboot_start, multiboot_end) {
-            let new_page = Page::containing_address(
-                frame.start_address() + KERNEL_BASE);
+            let new_page = Page::containing_address(frame.start_address() + KERNEL_BASE);
             mapper.map_to(new_page, frame, PRESENT, allocator);
         }
     });
@@ -266,11 +252,10 @@ pub fn remap_the_kernel<A>(active_table: &mut ActivePageTable,
     println!("New page table loaded");
 
     // Use the previous table as a guard page for the kernel stack
-    let old_p4_page = Page::containing_address(
-        old_table.p4_frame.start_address() + KERNEL_BASE);
+    let old_p4_page = Page::containing_address(old_table.p4_frame.start_address() + KERNEL_BASE);
     active_table.unmap(old_p4_page, allocator);
 
-    println!("New guard page at {:#x}",old_p4_page.start_address());
+    println!("New guard page at {:#x}", old_p4_page.start_address());
 }
 
 pub fn test_paging<A>(allocator: &mut A)

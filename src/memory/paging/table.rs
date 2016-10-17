@@ -43,12 +43,12 @@ impl<L> Table<L>
 {
     pub fn next_table(&self, index: usize) -> Option<&Table<L::NextLevel>> {
         self.next_table_address(index)
-            .map(|address|unsafe { &*(address as *const _) })
+            .map(|address| unsafe { &*(address as *const _) })
     }
 
     pub fn next_table_mut(&mut self, index: usize) -> Option<&mut Table<L::NextLevel>> {
         self.next_table_address(index)
-            .map(|address|unsafe { &mut *(address as *mut _) })
+            .map(|address| unsafe { &mut *(address as *mut _) })
     }
 
     fn next_table_address(&self, index: usize) -> Option<usize> {
@@ -62,8 +62,10 @@ impl<L> Table<L>
         }
     }
 
-    pub fn next_table_create<A>(&mut self, index: usize,
-                                allocator: &mut A) -> &mut Table<L::NextLevel>
+    pub fn next_table_create<A>(&mut self,
+                                index: usize,
+                                allocator: &mut A)
+                                -> &mut Table<L::NextLevel>
         where A: FrameAllocator
     {
         if self.next_table(index).is_none() {

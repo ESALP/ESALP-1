@@ -71,18 +71,23 @@ pub struct ExceptionStackFrame {
 
 impl fmt::Debug for ExceptionStackFrame {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, r#"
+        write!(f,
+               r#"
 ExceptionStackFrame {{
     Instruction Pointer: 0x{:04x}:{:0al$x},
     Stack Pointer:       0x{:04x}:{:0al$x},
     Flags:               0b{:0fl$b},
     Error Code:          0b{:0fl$b},
-}}"#,   self.code_segment, self.instruction_pointer,
-        self.stack_segment,self.stack_pointer,
-        self.cpu_flags, self.error_code,
-        // TODO maybe adjust this dynamically?
-        al = 16,
-        fl = 16)
+}}"#,
+               self.code_segment,
+               self.instruction_pointer,
+               self.stack_segment,
+               self.stack_pointer,
+               self.cpu_flags,
+               self.error_code,
+               // TODO maybe adjust this dynamically?
+               al = 16,
+               fl = 16)
     }
 }
 
@@ -118,15 +123,14 @@ ExceptionStackFrame {{
 //  | ----------------------------- | ---------- | ----------- | ---------- | ------------- |
 
 #[no_mangle]
-pub extern "C" fn rust_irq_handler(stack_frame: *const ExceptionStackFrame,
-                                   isr_number: usize) {
+pub extern "C" fn rust_irq_handler(stack_frame: *const ExceptionStackFrame, isr_number: usize) {
     match isr_number {
         0x0 => rust_de_handler(stack_frame),
         0x3 => breakpoint_handler(stack_frame),
         0xD => rust_gp_handler(stack_frame),
         0xE => rust_pf_handler(stack_frame),
-        0x21=> rust_kb_handler(),
-        _   => unreachable!(),
+        0x21 => rust_kb_handler(),
+        _ => unreachable!(),
     }
 }
 
@@ -139,8 +143,8 @@ extern "C" fn rust_de_handler(stack_frame: *const ExceptionStackFrame) {
 extern "C" fn breakpoint_handler(stack_frame: *const ExceptionStackFrame) {
     unsafe {
         print_error(format_args!("Breakpoint at {:#?}\n{:#?}",
-                                   (*stack_frame).instruction_pointer,
-                                   *stack_frame));
+                                 (*stack_frame).instruction_pointer,
+                                 *stack_frame));
     }
 }
 
@@ -169,9 +173,7 @@ extern "C" fn rust_kb_handler() {
 
             // If either shift is pressed, make it
             // capital as long as it is alphabetic
-            byte -= 0x20 *
-                    ((kb.keys[42] || kb.keys[54]) &&
-                      byte > 96 && byte < 123) as u8;
+            byte -= 0x20 * ((kb.keys[42] || kb.keys[54]) && byte > 96 && byte < 123) as u8;
             WRITER.lock().write_byte(byte);
         }
         // If this runs a key was released

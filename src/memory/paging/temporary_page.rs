@@ -28,9 +28,7 @@ impl TemporaryPage {
 
     /// Maps the temporary page to the given frame in the active page table.
     /// Returns the start address of the temporary page.
-    pub fn map(&mut self, frame: Frame, active_table: &mut ActivePageTable)
-        -> VirtualAddress
-    {
+    pub fn map(&mut self, frame: Frame, active_table: &mut ActivePageTable) -> VirtualAddress {
         use super::entry::WRITABLE;
 
         assert!(active_table.translate_page(self.page).is_none(),
@@ -48,9 +46,10 @@ impl TemporaryPage {
     /// Maps the temporary page to the given page table frame in the active
     /// page table. Returns a reference to the now mapped table.
     /// Returns a Table<Level1> because it is not recursively mapped
-    pub fn map_table_frame(&mut self, frame: Frame, active_table: &mut ActivePageTable)
-        -> &mut Table<Level1>
-    {
+    pub fn map_table_frame(&mut self,
+                           frame: Frame,
+                           active_table: &mut ActivePageTable)
+                           -> &mut Table<Level1> {
         unsafe { &mut *(self.map(frame, active_table) as *mut Table<Level1>) }
     }
 

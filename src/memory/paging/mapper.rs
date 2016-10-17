@@ -19,9 +19,7 @@ pub struct Mapper {
 
 impl Mapper {
     pub unsafe fn new() -> Mapper {
-        Mapper {
-            p4: Unique::new(table::P4),
-        }
+        Mapper { p4: Unique::new(table::P4) }
     }
 
     pub fn p4(&self) -> &Table<Level4> {
@@ -34,9 +32,7 @@ impl Mapper {
 
     /// Translates a virtual to the corresponding physical
     /// address. Returns `None` if the address is not mapped
-    pub fn translate(&self, virtual_address: VirtualAddress)
-        -> Option<PhysicalAddress>
-    {
+    pub fn translate(&self, virtual_address: VirtualAddress) -> Option<PhysicalAddress> {
         let offset = virtual_address % PAGE_SIZE;
         self.translate_page(Page::containing_address(virtual_address))
             .map(|frame| frame.0 * PAGE_SIZE + offset)
@@ -55,9 +51,8 @@ impl Mapper {
                     if p3_entry.flags().contains(HUGE_PAGE) {
                         // address must be 1GiB aligned
                         assert!(start_frame.0 % (ENTRY_COUNT * ENTRY_COUNT) == 0);
-                        return Some(Frame(
-                                start_frame.0 + page.p2_index() *
-                                ENTRY_COUNT + page.p1_index()));
+                        return Some(Frame(start_frame.0 + page.p2_index() * ENTRY_COUNT +
+                                          page.p1_index()));
                     }
                 }
                 if let Some(p2) = p3.next_table(page.p3_index()) {
@@ -67,7 +62,7 @@ impl Mapper {
                         if p2_entry.flags().contains(HUGE_PAGE) {
                             // address must be 2MiB aligned
                             assert!(start_frame.0 % ENTRY_COUNT == 0);
-                            return Some( Frame(start_frame.0 + page.p1_index()) );
+                            return Some(Frame(start_frame.0 + page.p1_index()));
                         }
                     }
                 }
@@ -84,8 +79,7 @@ impl Mapper {
     /// Maps the page to the frame with the provided flags
     /// The `PRESENT` flag is set by default. Needs a
     /// `FrameAllocator` as it might need to create new page tables
-    pub fn map_to<A>(&mut self, page: Page, frame: Frame,
-                     flags: EntryFlags, allocator: &mut A)
+    pub fn map_to<A>(&mut self, page: Page, frame: Frame, flags: EntryFlags, allocator: &mut A)
         where A: FrameAllocator
     {
         let mut p3 = self.p4_mut().next_table_create(page.p4_index(), allocator);
@@ -108,8 +102,7 @@ impl Mapper {
 
     /// Identity map the given frame with the provided Flags.
     /// The `FrameAllocator is used to create a new page table if needed.
-    pub fn identity_map<A>(&mut self, frame: Frame,
-                           flags: EntryFlags, allocator: &mut A)
+    pub fn identity_map<A>(&mut self, frame: Frame, flags: EntryFlags, allocator: &mut A)
         where A: FrameAllocator
     {
         let page = Page::containing_address(frame.start_address());

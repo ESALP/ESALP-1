@@ -49,9 +49,7 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) {
     vga_buffer::clear_screen();
     println!("Hello Rust log \x01");
 
-    let boot_info = unsafe {
-        multiboot2::load(multiboot_info_address)
-    };
+    let boot_info = unsafe { multiboot2::load(multiboot_info_address) };
 
     for module in boot_info.module_tags() {
         if module.name() == "keyboard" {
