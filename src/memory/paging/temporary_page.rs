@@ -53,6 +53,12 @@ impl TemporaryPage {
     {
         unsafe { &mut *(self.map(frame, active_table) as *mut Table<Level1>) }
     }
+
+    pub fn drop<A>(&mut self, allocator: &mut A)
+        where A: FrameAllocator
+    {
+        self.allocator.drop(allocator);
+    }
 }
 
 struct TinyAllocator([Option<Frame>; 3]);
@@ -63,6 +69,17 @@ impl TinyAllocator {
     {
         let mut f = || allocator.allocate_frame();
         TinyAllocator([f(), f(), f()])
+    }
+
+    fn drop<A>(&mut self, allocator: &mut A)
+        where A: FrameAllocator
+    {
+        for frame_option in &mut self.0 {
+            if let Some(ref frame) = *frame_option {
+                allocator.deallocate_frame(frame.clone());
+            }
+            *frame_option = None;
+        }
     }
 }
 
