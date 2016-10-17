@@ -260,6 +260,7 @@ pub fn remap_the_kernel<A>(active_table: &mut ActivePageTable,
             mapper.map_to(new_page, frame, PRESENT, allocator);
         }
     });
+    temporary_page.drop(allocator);
 
     let old_table = active_table.switch(new_table);
     println!("New page table loaded");
