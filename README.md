@@ -11,14 +11,16 @@ Project Goals:
 
 
 ##Features
-Right now it doesn't do much but... it will soon!
+Right now it doesn't do much, but more is added every day!
 
 Current features:
-+ Can print to the VGA buffer (in 255 different colors!)
++ Can print to the VGA text buffer (in 255 different colors!)
+ + Using a non-blocking log buffer
 + Simple PS/2 keyboard driver
  + with multiple keyboard maps
 + Simple paging
-+ kernel space allocation
+ + With physical frame allocation _and_ deallocation
++ Kernel space heap
 + **More to come**
 
 ##How to Compile
