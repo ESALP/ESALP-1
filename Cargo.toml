@@ -18,6 +18,9 @@ path = "libs/hole_list_allocator"
 features = ["spin_no_std"]
 version = "0.2.1"
 
+[dependencies.log_buffer]
+git = "https://github.com/ESALP/rust-log_buffer"
+
 [dependencies.x86]
 default-features = false
 version = "0.7.1"

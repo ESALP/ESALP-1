@@ -12,6 +12,7 @@
 #![feature(const_fn, unique)]
 #![feature(associated_type_defaults)]
 #![feature(asm)]
+#![feature(relaxed_adts)]
 #![no_std]
 
 // crates.io crates
@@ -27,6 +28,9 @@ extern crate bitflags;
 extern crate lazy_static;
 #[macro_use]
 extern crate once;
+
+// Features without allocation
+extern crate log_buffer;
 
 // Features involving allocation
 extern crate hole_list_allocator;
@@ -68,8 +72,7 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) {
     memory::init(&boot_info);
 
     println!("Try to write some things!");
-    vga_buffer::WRITER.lock()
-        .color(vga_buffer::Color::White, vga_buffer::Color::Black);
+    vga_buffer::change_color(vga_buffer::Color::White, vga_buffer::Color::Black);
 
     loop {}
 }
@@ -84,7 +87,7 @@ pub extern "C" fn _Unwind_Resume() -> ! {
 extern "C" fn eh_personality() {}
 #[lang = "panic_fmt"]
 extern "C" fn panic_fmt(args: ::core::fmt::Arguments, file: &'static str, line: u32) -> ! {
-    vga_buffer::WRITER.lock().color(vga_buffer::Color::Red, vga_buffer::Color::Black);
+    vga_buffer::change_color(vga_buffer::Color::Red, vga_buffer::Color::Black);
     println!("\n\nPANIC at {}:{}", file, line);
     println!("\t{}", args);
     unsafe { KEXIT() }

@@ -13,9 +13,9 @@ use core::fmt;
 
 use spin::Mutex;
 
-use vga_buffer::print_error;
 use self::pic::ChainedPICs;
 pub use self::keyboard::KEYBOARD;
+use vga_buffer;
 
 mod keyboard;
 mod cpuio;
@@ -27,6 +27,7 @@ extern "C" {
     fn isr3();
     fn isr13();
     fn isr14();
+    fn isr32();
     fn isr33();
     fn sti();
     fn KEXIT();
@@ -39,7 +40,9 @@ lazy_static! {
         // Initialize handlers
         idt.set_handler(0x0, isr0 );
         idt.set_handler(0x3, isr3 );
+        idt.set_handler(0xD, isr13);
         idt.set_handler(0xE, isr14);
+        idt.set_handler(0x20,isr32);
         idt.set_handler(0x21,isr33);
         idt
     };
@@ -52,7 +55,6 @@ pub fn init() {
     unsafe {
         {
             let mut pic = PIC.lock();
-            pic.set_mask(0);
             pic.initialize();
         }
         sti();
@@ -129,6 +131,7 @@ pub extern "C" fn rust_irq_handler(stack_frame: *const ExceptionStackFrame, isr_
         0x3 => breakpoint_handler(stack_frame),
         0xD => rust_gp_handler(stack_frame),
         0xE => rust_pf_handler(stack_frame),
+        0x20 => rust_timer_handler(),
         0x21 => rust_kb_handler(),
         _ => unreachable!(),
     }
@@ -142,9 +145,9 @@ extern "C" fn rust_de_handler(stack_frame: *const ExceptionStackFrame) {
 
 extern "C" fn breakpoint_handler(stack_frame: *const ExceptionStackFrame) {
     unsafe {
-        print_error(format_args!("Breakpoint at {:#?}\n{:#?}",
-                                 (*stack_frame).instruction_pointer,
-                                 *stack_frame));
+        println!("Breakpoint at {:#?}\n{:#?}",
+                 (*stack_frame).instruction_pointer,
+                 *stack_frame);
     }
 }
 
@@ -160,9 +163,15 @@ extern "C" fn rust_pf_handler(stack_frame: *const ExceptionStackFrame) {
     }
 }
 
-extern "C" fn rust_kb_handler() {
-    use vga_buffer::WRITER;
+extern "C" fn rust_timer_handler() {
+    // print to the screen
+    vga_buffer::flush_screen();
+    unsafe {
+        PIC.lock().master.end_of_interrupt();
+    }
+}
 
+extern "C" fn rust_kb_handler() {
     let mut kb = KEYBOARD.lock();
     match kb.port.read() {
         // If the key was just pressed,
@@ -174,7 +183,7 @@ extern "C" fn rust_kb_handler() {
             // If either shift is pressed, make it
             // capital as long as it is alphabetic
             byte -= 0x20 * ((kb.keys[42] || kb.keys[54]) && byte > 96 && byte < 123) as u8;
-            WRITER.lock().write_byte(byte);
+            print!("{}", byte as char);
         }
         // If this runs a key was released
         // load a false into kb.keys at that point
