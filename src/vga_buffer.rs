@@ -9,9 +9,7 @@
 
 #![allow(dead_code)]
 
-
 use core::ptr::Unique;
-use core::fmt;
 use spin::Mutex;
 use log_buffer::LogBuffer;
 use core::sync::atomic::{ATOMIC_BOOL_INIT, ATOMIC_USIZE_INIT};
@@ -27,19 +25,19 @@ static WRITER: Mutex<Writer> = Mutex::new(Writer {
     buffer: unsafe { Unique::new(0xb8000 as *mut _) },
 });
 
-// this doesn't work, so it's commented out
-//impl<T> AsMut<[T; 4096]> for [T; 4096] {}
-
-//#[derive(Sized)]
 pub struct BufWrapper<T>([T; 4096]);
 
 impl<T> AsMut<[T]> for BufWrapper<T> {
-	fn as_mut(&mut self) -> &mut [T] {
-		self.0.as_mut()
-	}
+    fn as_mut(&mut self) -> &mut [T] {
+        self.0.as_mut()
+    }
 }
 
-pub static WRITE_BUF: LogBuffer<BufWrapper<u8>> = LogBuffer { buffer: UnsafeCell::new(BufWrapper::<u8> {0: [0xff; 4096]}), position: ATOMIC_USIZE_INIT, lock: ATOMIC_BOOL_INIT };
+pub static WRITE_BUF: LogBuffer<BufWrapper<u8>> = LogBuffer {
+    buffer: UnsafeCell::new(BufWrapper::<u8> { 0: [0xff; 4096] }),
+    position: ATOMIC_USIZE_INIT,
+    lock: ATOMIC_BOOL_INIT,
+};
 
 macro_rules! println {
 	($fmt:expr) => (print!(concat!($fmt, "\n")));
@@ -54,25 +52,6 @@ macro_rules! print {
 	});
 }
 
-//pub fn print_debug(s: &str) {
-//	unsafe {print_error(format_args!("{}",s));}
-//}
-
-//pub unsafe fn print_error(fmt: fmt::Arguments) {
-//    use core::fmt::Write;
-//
-//    let mut writer = Writer {
-//        column_position: 0,
-//        color_code: ColorCode::new(Color::Red, Color::Black),
-//        buffer: Unique::new(0xb8000 as *mut _),
-//    };
-//    writer.new_line();
-//    match writer.write_fmt(fmt) {
-//        Ok(_) => (),
-//        Err(_) => panic!("Failed to write error: {}", fmt),
-//    }
-//}
-
 pub fn clear_screen() {
     for _ in 0..BUFFER_HEIGHT {
         println!("");
@@ -80,12 +59,12 @@ pub fn clear_screen() {
 }
 
 pub fn flush_screen() {
-	WRITER.lock().write_str(WRITE_BUF.extract());
-	WRITE_BUF.clear();
+    WRITER.lock().write_str(WRITE_BUF.extract());
+    WRITE_BUF.clear();
 }
 
 pub fn change_color(fg: Color, bg: Color) {
-	WRITER.lock().color(fg,bg);
+    WRITER.lock().color(fg, bg);
 }
 
 #[allow(dead_code)]

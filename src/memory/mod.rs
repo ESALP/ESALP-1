@@ -10,15 +10,30 @@
 #![allow(dead_code,unused_variables)]
 
 use multiboot2::BootInformation;
+use spin::Mutex;
 
-pub use self::area_frame_allocator::AreaFrameAllocator;
+pub use self::area_frame_iter::AreaFrameIter;
+use self::stack_frame_allocator::StackFrameAllocator;
 use self::paging::PhysicalAddress;
 
 
-mod area_frame_allocator;
+mod area_frame_iter;
+mod stack_frame_allocator;
 mod paging;
 
+pub const KERNEL_BASE: usize = 0xFFFF_FFFF_8000_0000;
 pub const PAGE_SIZE: usize = 4096;
+
+const HEAP_START: usize = 0o000_001_000_0000;
+const HEAP_SIZE: usize = 100 * 1024;
+
+lazy_static! {
+    static ref ACTIVE_TABLE: Mutex<paging::ActivePageTable> = {
+        unsafe {
+            Mutex::new( paging::ActivePageTable::new() )
+        }
+    };
+}
 
 pub fn init(boot_info: &BootInformation) {
     // For this function to be safe, it must only be called once.
@@ -30,34 +45,51 @@ pub fn init(boot_info: &BootInformation) {
         .expect("ELF sections tag required");
 
     let kernel_start = elf_sections_tag.sections()
-        .filter(|s| s.is_allocated()).map(|s| s.addr).min().unwrap();
+        .filter(|s| s.is_allocated())
+        .filter(|s| s.start_address() >= KERNEL_BASE)
+        .map(|s| s.start_address() - KERNEL_BASE)
+        .min()
+        .unwrap();
     let kernel_end = elf_sections_tag.sections()
-        .filter(|s| s.is_allocated()).map(|s| s.addr + s.size).max().unwrap();
+        .filter(|s| s.is_allocated())
+        .filter(|s| s.start_address() >= KERNEL_BASE)
+        .map(|s| s.end_address() - KERNEL_BASE)
+        .max()
+        .unwrap();
 
-    println!("Kernel start:    {:#x}, Kernel end:    {:#x}",
+    println!("Physical kernel start:    {:#x}, Physical kernel end:    {:#x}",
              kernel_start,
              kernel_end);
-    println!("Multiboot start: {:#x}, Multiboot end: {:#x}",
-             boot_info.start_address(),
-             boot_info.end_address());
+    println!("Physical multiboot start: {:#x}, Physical multiboot end: {:#x}",
+             boot_info.start_address() - KERNEL_BASE,
+             boot_info.end_address() - KERNEL_BASE);
 
-    let mut frame_allocator =  AreaFrameAllocator::new(kernel_start as usize,
-                                                       kernel_end as usize,
-                                                       boot_info.start_address(),
-                                                       boot_info.end_address(),
-                                                       memory_map_tag.memory_areas());
+    // TODO Make a static active table
+    let mut active_table = unsafe { paging::ActivePageTable::new() };
 
-    let mut active_table =
-        paging::remap_the_kernel(&mut frame_allocator, boot_info);
+    let mut frame_allocator =
+        unsafe {
+            StackFrameAllocator::new(AreaFrameIter::new(kernel_start as usize,
+                                                        kernel_end as usize,
+                                                        boot_info.start_address() - KERNEL_BASE,
+                                                        boot_info.end_address() - KERNEL_BASE,
+                                                        memory_map_tag.memory_areas()))
+        };
+
+    paging::remap_the_kernel(&mut active_table, &mut frame_allocator, boot_info);
 
     use self::paging::Page;
-    use hole_list_allocator::{HEAP_START, HEAP_SIZE};
+    use hole_list_allocator;
 
     let heap_start_page = Page::containing_address(HEAP_START);
     let heap_end_page = Page::containing_address(HEAP_START + HEAP_SIZE - 1);
 
     for page in Page::range_inclusive(heap_start_page, heap_end_page) {
         active_table.map(page, paging::WRITABLE, &mut frame_allocator);
+    }
+
+    unsafe {
+        hole_list_allocator::init(HEAP_START, HEAP_SIZE);
     }
 }
 
@@ -78,7 +110,7 @@ impl Frame {
     }
 
     fn range_inclusive(start: Frame, end: Frame) -> FrameIter {
-        FrameIter{
+        FrameIter {
             start: start,
             end: end,
         }

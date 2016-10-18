@@ -10,7 +10,7 @@
 // WARNING: IN ORDER FOR THIS FILE TO HAVE SAFETY
 //          THE PAGE TABLE MUST BE MAPPED RECURSIVELY
 //
-// If the 511th entry of the p4 table is not mapped to
+// If the 510th entry of the p4 table is not mapped to
 // the p4 table itself, we cannot gurentee that any of
 // these addresses are valid.
 
@@ -21,7 +21,7 @@ use memory::FrameAllocator;
 use core::marker::PhantomData;
 use core::ops::{Index, IndexMut};
 
-pub const P4: *mut Table<Level4> = 0xffffffff_fffff000 as *mut _;
+pub const P4: *mut Table<Level4> = 0o177777_776_776_776_776_0000 as *mut _;
 
 pub struct Table<L: TableLevel> {
     entries: [Entry; ENTRY_COUNT],
@@ -43,26 +43,29 @@ impl<L> Table<L>
 {
     pub fn next_table(&self, index: usize) -> Option<&Table<L::NextLevel>> {
         self.next_table_address(index)
-            .map(|address|unsafe { &*(address as *const _) })
+            .map(|address| unsafe { &*(address as *const _) })
     }
 
     pub fn next_table_mut(&mut self, index: usize) -> Option<&mut Table<L::NextLevel>> {
         self.next_table_address(index)
-            .map(|address|unsafe { &mut *(address as *mut _) })
+            .map(|address| unsafe { &mut *(address as *mut _) })
     }
 
     fn next_table_address(&self, index: usize) -> Option<usize> {
         let entry_flags = self[index].flags();
         if entry_flags.contains(PRESENT) && !entry_flags.contains(HUGE_PAGE) {
             let table_address = self as *const _ as usize;
-            Some((table_address << 9) | (index << 12))
+            // Or 0xffff << 48 to ensure a canonical address
+            Some((0xffff << 48) | (table_address << 9) | (index << 12))
         } else {
             None
         }
     }
 
-    pub fn next_table_create<A>(&mut self, index: usize,
-                                allocator: &mut A) -> &mut Table<L::NextLevel>
+    pub fn next_table_create<A>(&mut self,
+                                index: usize,
+                                allocator: &mut A)
+                                -> &mut Table<L::NextLevel>
         where A: FrameAllocator
     {
         if self.next_table(index).is_none() {

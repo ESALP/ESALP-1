@@ -1,0 +1,26 @@
+language: rust
+
+rust:
+    - nightly
+
+cache: cargo
+
+install:
+    - curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain nightly
+    - source ~/.cargo/env
+    - rustup component add rust-src
+    - (cargo install xargo || true)
+    - (cargo install rustfmt || true)
+
+sudo: false
+
+notifications:
+    on_success: never
+    on_failure: change
+
+addons:
+    apt:
+        packages:
+            - nasm
+
+script: bash scripts/travis-build.sh

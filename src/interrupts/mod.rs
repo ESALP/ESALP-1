@@ -55,7 +55,6 @@ pub fn init() {
     unsafe {
         {
             let mut pic = PIC.lock();
-//            pic.set_mask(0);
             pic.initialize();
         }
         sti();
@@ -74,18 +73,23 @@ pub struct ExceptionStackFrame {
 
 impl fmt::Debug for ExceptionStackFrame {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, r#"
+        write!(f,
+               r#"
 ExceptionStackFrame {{
     Instruction Pointer: 0x{:04x}:{:0al$x},
     Stack Pointer:       0x{:04x}:{:0al$x},
     Flags:               0b{:0fl$b},
     Error Code:          0b{:0fl$b},
-}}"#,   self.code_segment, self.instruction_pointer,
-        self.stack_segment,self.stack_pointer,
-        self.cpu_flags, self.error_code,
-        // TODO maybe adjust this dynamically?
-        al = 16,
-        fl = 16)
+}}"#,
+               self.code_segment,
+               self.instruction_pointer,
+               self.stack_segment,
+               self.stack_pointer,
+               self.cpu_flags,
+               self.error_code,
+               // TODO maybe adjust this dynamically?
+               al = 16,
+               fl = 16)
     }
 }
 
@@ -121,16 +125,15 @@ ExceptionStackFrame {{
 //  | ----------------------------- | ---------- | ----------- | ---------- | ------------- |
 
 #[no_mangle]
-pub extern "C" fn rust_irq_handler(stack_frame: *const ExceptionStackFrame,
-                                   isr_number: usize) {
-	match isr_number {
+pub extern "C" fn rust_irq_handler(stack_frame: *const ExceptionStackFrame, isr_number: usize) {
+    match isr_number {
         0x0 => rust_de_handler(stack_frame),
         0x3 => breakpoint_handler(stack_frame),
         0xD => rust_gp_handler(stack_frame),
         0xE => rust_pf_handler(stack_frame),
         0x20 => rust_timer_handler(),
         0x21 => rust_kb_handler(),
-        _   => unreachable!(),
+        _ => unreachable!(),
     }
 }
 
@@ -143,8 +146,8 @@ extern "C" fn rust_de_handler(stack_frame: *const ExceptionStackFrame) {
 extern "C" fn breakpoint_handler(stack_frame: *const ExceptionStackFrame) {
     unsafe {
         println!("Breakpoint at {:#?}\n{:#?}",
-                                   (*stack_frame).instruction_pointer,
-                                   *stack_frame);
+                 (*stack_frame).instruction_pointer,
+                 *stack_frame);
     }
 }
 
@@ -161,29 +164,26 @@ extern "C" fn rust_pf_handler(stack_frame: *const ExceptionStackFrame) {
 }
 
 extern "C" fn rust_timer_handler() {
-	// print to the screen
-	vga_buffer::flush_screen();
-	unsafe {
-		PIC.lock().master.end_of_interrupt();
-	}
+    // print to the screen
+    vga_buffer::flush_screen();
+    unsafe {
+        PIC.lock().master.end_of_interrupt();
+    }
 }
 
 extern "C" fn rust_kb_handler() {
     let mut kb = KEYBOARD.lock();
-//    panic!("KEYBOARD");
     match kb.port.read() {
         // If the key was just pressed,
         // then the top bit of it is set
         x if x & 0x80 == 0 => {
             kb.keys[x as usize] = true;
-            let mut byte: u8 = kb.kbmap[x as usize];
+            let mut byte = kb.kbmap[x as usize];
 
             // If either shift is pressed, make it
             // capital as long as it is alphabetic
-            byte -= 0x20 *
-                    ((kb.keys[42] || kb.keys[54]) &&
-                      byte > 96 && byte < 123) as u8;
-            print!("{}",byte as char);
+            byte -= 0x20 * ((kb.keys[42] || kb.keys[54]) && byte > 96 && byte < 123) as u8;
+            print!("{}", byte as char);
         }
         // If this runs a key was released
         // load a false into kb.keys at that point

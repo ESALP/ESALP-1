@@ -1,4 +1,4 @@
-#ESALP
+#ESALP [![Build Status](https://travis-ci.org/ESALP/ESALP-1.svg?branch=master)](https://travis-ci.org/ESALP/ESALP-1)
 **E**ndangered **S**oaring **A**frican **L**ynx-**P**idgeon is a **work in progress** OS by Calvin Lee and JJ Garzella
 
 It is an implimentation of Phillipp Oppermann's [Blog OS](https://github.com/phil-opp/blog_os), go check out that repository and [his blog](http://os.phil-opp.com/) for more details.

@@ -7,10 +7,13 @@
 ; This file may not be copied, modified, or distributed
 ; except according to those terms.
 
-global start
-extern long_mode_start
+; Kernel is linked to run at -2Gb
+KERNEL_BASE equ 0xFFFFFFFF80000000
 
-section .text
+global start
+
+; Section must have the permissions of .text
+section .init.text progbits alloc exec nowrite
 bits 32 ;We are still in protected mode
 start:
 	; The bootloader has loaded us into 32-bit protected mode on a x86
@@ -26,81 +29,115 @@ start:
 	; To set up a stack, we set the esp register to point to the top of our
 	; stack (as it grows downwards on x86 systems). This is necessarily done
 	; in assembly as languages such as Rust cannot function without a stack.
-	mov esp, stack_top
+	;
+	; We subtract KERNEL_BASE from the stack address because we are not yet
+	; mapped to the higher half
+	mov esp, stack_top - KERNEL_BASE
+
+	; The multiboot2 specification requires the bootloader to load a pointer
+	; to the multiboot2 information structure in the `ebx` register. Here we
+	; mov it to `edi` so that rust can take it as a register. Because of this
+	; we cannot clobber the edi register in any code before rust_main
 	mov edi, ebx
 
 	call check_multiboot
 	call check_cpuid
 	call check_long_mode
 
+	call set_up_SSE
+
 	call set_up_page_tables
 	call enable_paging
 
-	call set_up_SSE
-
 	; Load the 64-bit GDT
-	lgdt [gdt64.pointer]
-
-	; update selectors
-	mov ax, gdt64.data ; data offset
-	mov ss, ax
-	mov ds, ax
-	mov es, ax
+	lgdt [GDT.ptr_low - KERNEL_BASE]
 
 	; Load the code selector with a far jmp
 	; From now on instructions are 64 bits and this file is invalid
-	jmp gdt64.code:long_mode_start ; -> !
+	jmp GDT.code:long_mode_start; -> !
 
 set_up_page_tables:
-	; map first P4 entry to P3 table
-	mov eax, p3_table
-	or eax, 0b11 ; present + writable
-	mov [p4_table], eax
+	; Set up recursive paging at the second to last entry
+	mov eax, p4_table - KERNEL_BASE
+	or eax, 11b ; present + writable
+	mov [(p4_table - KERNEL_BASE) + (510 * 8)], eax
 
-	; map first P3 entry to P2 table
-	mov eax, p2_table
-	or eax, 0b11 ; present + writable
-	mov [p3_table], eax
+	; map the first P4 entry to the first p3 table
+	;
+	; This will be changed to the page containing
+	; only the first megabyte before rust starts
+	mov eax, low_p3_table - KERNEL_BASE
+	or eax, 11b ; present + writable
+	mov [p4_table - KERNEL_BASE], eax
+
+	; map the last P4 entry to last P3 table
+	mov eax, high_p3_table - KERNEL_BASE
+	or eax, 11b ; present + writable
+	mov [p4_table - KERNEL_BASE + (511 * 8)], eax
+
+	; map first entry of the low P3 table to the kernel table
+	mov eax, kernel_table - KERNEL_BASE
+	or eax, 11b ; present + writable
+	mov [low_p3_table - KERNEL_BASE], eax
+	; now to the second to highest entry of the high P3 table
+	mov [high_p3_table - KERNEL_BASE + (510 * 8)], eax
 
 	; map each P2 entry to a huge 2MiB page
 	mov ecx, 0x0       ; counter variable
 
-	; Set up recursive paging
-	mov eax, p4_table
-	or eax, 0b11 ; present + writable
-	mov [p4_table + (511 * 8)], eax
-
-.map_p2_table:
+.map_kernel_table:
 	mov eax, 0x200000  ; 2MiB
 	mul ecx            ; start address of ecx-th page
-	or eax, 0b10000011 ; present + writable + huge
-	mov [p2_table + (ecx * 8)], eax ; map ecx-th entry
+	or eax, 10000011b  ; present + writable + huge
+	mov [(kernel_table - KERNEL_BASE) + (ecx * 8)], eax ; map ecx-th entry
 
 	inc ecx            ; increase counter
 	cmp ecx, 512       ; if counter == 512, the whole P2 table is mapped
-	jne .map_p2_table  ; else map the next entry
+	jne .map_kernel_table  ; else map the next entry
+
+	; map the first p2 entry to the megabyte table
+	mov eax, megabyte_table - KERNEL_BASE
+	or eax, 11b
+	mov [low_p2_table - KERNEL_BASE], eax
+
+	; identity map the first megabyte
+	mov ecx, 0x0
+
+.map_megabyte_table:
+	mov eax, 4096      ; 4Kb
+	mul ecx            ; start address of ecx-th page
+	or eax, 11b        ; present + writable
+	mov [(megabyte_table - KERNEL_BASE) + (ecx * 8)], eax ; map ecx-th entry
+
+	inc ecx            ; increase counter
+	cmp ecx, 256       ; if counter = 256, the whole megabyte is mapped
+	jne .map_megabyte_table ; else map the next entry
 
 	ret
 
 enable_paging:
-	; load P4 to cr3 register (cpu uses this to access the P4 table)
-	mov eax, p4_table
-	mov cr3, eax
-
-	; enable PAE-flag in cr4 (Physical Address Extension)
+	; Enable:
+	;     PGE: (Page Global Extentions)
+	;     PAE: (Physical Address Extension)
+	;     PSE: (Physical Size Extentions)
 	mov eax, cr4
-	or eax, 1 << 5
+	or eax, (1 << 7) | (1 << 5) | (1 << 1)
 	mov cr4, eax
 
-	; set the long mode bit in the EFER MSR (model specific register)
+	; load P4 to cr3 register (cpu uses this to access the P4 table)
+	mov eax, p4_table - KERNEL_BASE
+	mov cr3, eax
+
+	; set the no execute, long mode and system call extention
+	; bits in the EFER MSR (model specific register)
 	mov ecx, 0xC0000080
 	rdmsr
-	or eax, 1 << 8
+	or eax, (1 <<11) | (1 << 8) | (1 << 0) ; NXE, LME, SCE
 	wrmsr
 
-	; enable paging in the cr0 register
+	; enable paging and write protection in the cr0 register
 	mov eax, cr0
-	or eax, 1 << 31
+	or eax, (1 << 31) | (1 << 16) ; PG | WP
 	mov cr0, eax
 
 	ret
@@ -190,6 +227,99 @@ _error:
 	mov byte  [0xb800a], al
 	hlt
 
+; ---------------------------------------- Long Mode ----------------------------------------
+bits 64
+section .init.text.high
+global long_mode_start
+long_mode_start:
+	; Load the new GDT
+	lgdt [GDT.ptr]
+
+	; Long jump to the higher half. Because `jmp` does not take
+	; a 64 bit address (which we need because we are practically
+	; jumping to address +254Tb), we must first load the address
+	; to `rax` and then jump to it
+	mov rax, start_high
+	jmp rax
+
+section .text
+extern rust_main
+extern eputs
+extern puts
+
+global start_high
+start_high:
+	; Set up high stack
+	add rsp, KERNEL_BASE
+
+	; get rid of the old identity map, but
+	; continue to identity map the first Mb
+	mov rax, low_p2_table - KERNEL_BASE
+	or rax, 11b ; present + writable
+	mov [low_p3_table], rax
+
+	; set up the segment registers
+	mov ax, GDT.data ; data offset
+	mov ss, ax
+	mov ds, ax
+	mov es, ax
+
+	; Save the multiboot address
+	push rdi
+	; Load puts arguments
+	mov rdi, strings.long_start
+	mov si, 0x0f
+	call puts
+	pop rdi
+
+	; Give rust the higher half address to the
+	; multiboot2 information structure
+	add rdi, KERNEL_BASE
+	; call Rust
+	call rust_main
+
+	; rust main returned, print `OS returned!`
+	mov rdi, strings.os_return
+	call eputs
+
+	; If the system has nothing more to do, put the computer into an
+	; infinite loop. To do that:
+	; 1) Disable interrupts with cli (clear interrupt enable in eflags).
+	;    They are already disabled by the bootloader, so this is not needed.
+	;    Mind that you might later enable interrupts and return from
+	;    kernel_main (which is sort of nonsensical to do).
+	; 2) Wait for the next interrupt to arrive with hlt (halt instruction).
+	;    Since they are disabled, this will lock up the computer.
+	; 3) Jump to the hlt instruction if it ever wakes up due to a
+	;    non-maskable interrupt occurring or due to system management mode.
+global KEXIT
+KEXIT:
+	cli
+.loop:
+	hlt
+	jmp .loop
+
+section .rodata
+; TODO TSS <http://wiki.osdev.org/Task_State_Segment>
+GDT:
+	dq 0 ; zero entry
+.code equ $ - GDT
+	dq (1<<44) | (1<<47) | (1<<41) | (1<<43) | (1<<53) ; code segment
+.data equ $ - GDT
+	dq (1<<44) | (1<<47) | (1<<41) ; data segment
+.end equ $
+.ptr_low:
+	dw .end - GDT - 1
+	dd GDT - KERNEL_BASE
+.ptr:
+	dw .end - GDT - 1
+	dq GDT
+
+strings:
+.os_return:
+	db 'OS returned',0
+.long_start:
+	db 'Hello long mode!',0
 
 section .bss
 ; This reserves space for an empty page table to be loaded at runtime
@@ -198,9 +328,15 @@ section .bss
 align 4096
 p4_table:
 	resb 4096
-p3_table:
+low_p3_table:
 	resb 4096
-p2_table:
+high_p3_table:
+	resb 4096
+low_p2_table:
+	resb 4096
+megabyte_table:
+	resb 4096
+kernel_table:
 	resb 4096
 
 ; The multiboot standard does not define the value of the stack pointer register
@@ -217,14 +353,3 @@ align 16
 stack_bottom:
 	resb 4096 * 2
 stack_top:
-
-section .rodata
-gdt64:
-	dq 0 ; zero entry
-.code equ $ - gdt64
-	dq (1<<44) | (1<<47) | (1<<41) | (1<<43) | (1<<53) ; code segment
-.data equ $ - gdt64
-	dq (1<<44) | (1<<47) | (1<<41) ; data segment
-.pointer:
-	dw $ - gdt64 - 1
-	dq gdt64

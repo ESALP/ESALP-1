@@ -9,6 +9,7 @@ bitflags = "0.7.0"
 once = "0.3.2"
 rlibc = "0.1.4"
 spin = "0.3.4"
+multiboot2 = "0.3.0"
 
 [dependencies.hole_list_allocator]
 path = "libs/hole_list_allocator"
@@ -17,11 +18,8 @@ path = "libs/hole_list_allocator"
 features = ["spin_no_std"]
 version = "0.2.1"
 
-[dependencies.multiboot2]
-git = "https://github.com/phil-opp/multiboot2-elf64"
-
 [dependencies.log_buffer]
-path = "/Users/jjgarzella/Developer/Languages/Rust/rust-log_buffer"
+git = "https://github.com/ESALP/rust-log_buffer"
 
 [dependencies.x86]
 default-features = false
@@ -37,3 +35,5 @@ panic = "abort"
 
 [profile.release]
 panic = "abort"
+
+[workspace]

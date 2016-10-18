@@ -7,5 +7,3 @@ version = "0.1.0"
 spin = "0.3.4"
 lazy_static = "0.2.1"
 linked_list_allocator = "0.2.2"
-
-[workspace]
