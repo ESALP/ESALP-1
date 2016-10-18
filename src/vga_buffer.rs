@@ -9,12 +9,14 @@
 
 #![allow(dead_code)]
 
+
 use core::ptr::Unique;
 use core::fmt;
 use spin::Mutex;
 use log_buffer::LogBuffer;
 use core::sync::atomic::{ATOMIC_BOOL_INIT, ATOMIC_USIZE_INIT};
 use core::cell::UnsafeCell;
+use core::convert::AsMut;
 
 const BUFFER_HEIGHT: usize = 25;
 const BUFFER_WIDTH: usize = 80;
@@ -25,7 +27,19 @@ static WRITER: Mutex<Writer> = Mutex::new(Writer {
     buffer: unsafe { Unique::new(0xb8000 as *mut _) },
 });
 
-pub static WRITE_BUF: LogBuffer<[u8; 32]> = LogBuffer { buffer: UnsafeCell::new([0xff; 32]), position: ATOMIC_USIZE_INIT, lock: ATOMIC_BOOL_INIT };
+// this doesn't work, so it's commented out
+//impl<T> AsMut<[T; 4096]> for [T; 4096] {}
+
+//#[derive(Sized)]
+pub struct BufWrapper<T>([T; 4096]);
+
+impl<T> AsMut<[T]> for BufWrapper<T> {
+	fn as_mut(&mut self) -> &mut [T] {
+		self.0.as_mut()
+	}
+}
+
+pub static WRITE_BUF: LogBuffer<BufWrapper<u8>> = LogBuffer { buffer: UnsafeCell::new(BufWrapper::<u8> {0: [0xff; 4096]}), position: ATOMIC_USIZE_INIT, lock: ATOMIC_BOOL_INIT };
 
 macro_rules! println {
 	($fmt:expr) => (print!(concat!($fmt, "\n")));

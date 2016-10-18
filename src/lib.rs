@@ -13,6 +13,7 @@
 #![feature(core_intrinsics)]
 #![feature(associated_type_defaults)]
 #![feature(naked_functions, asm)]
+#![feature(relaxed_adts)]
 #![no_std]
 
 // crates.io crates

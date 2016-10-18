@@ -176,14 +176,14 @@ extern "C" fn rust_kb_handler() {
         // then the top bit of it is set
         x if x & 0x80 == 0 => {
             kb.keys[x as usize] = true;
-            let mut byte = kb.kbmap[x as usize];
+            let mut byte: u8 = kb.kbmap[x as usize];
 
             // If either shift is pressed, make it
             // capital as long as it is alphabetic
             byte -= 0x20 *
                     ((kb.keys[42] || kb.keys[54]) &&
                       byte > 96 && byte < 123) as u8;
-            println!("{}",byte);
+            print!("{}",byte as char);
         }
         // If this runs a key was released
         // load a false into kb.keys at that point
