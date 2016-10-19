@@ -14,13 +14,25 @@ use memory::paging::Page;
 use memory::area_frame_iter::AreaFrameIter;
 use memory::ACTIVE_TABLE;
 
+/// An allocator for physical frames using the stack.
 pub struct StackFrameAllocator {
+    /// The allocator will get frames from this field if it has no more frames.
     frame_iter: AreaFrameIter,
+    /// This is a `Frame` pointer to the bottom of the stack. It is always at
+    /// `0o177777_777_777_000_000_0000`, which is right above the kernel table.
     stack_base: Unique<Frame>,
+    /// The offset to the current head of the stack.
     offset: isize,
 }
 
 impl StackFrameAllocator {
+    /// Returns a new `StackFrameAllocator`.
+    ///
+    /// # Safety
+    /// This function can only safely be called once. It always returns an allocator
+    /// with the same base address, and one may already be initialized. Thus it is
+    /// up to the caller to make sure that the stack is not yet initialized, or is in
+    /// a defined state before calling
     pub unsafe fn new(area_frame_iter: AreaFrameIter) -> StackFrameAllocator {
         // The stack grows upward from the kernel page to the top of memory
         let mut allocator = StackFrameAllocator {
@@ -40,6 +52,11 @@ impl StackFrameAllocator {
     }
 }
 impl FrameAllocator for StackFrameAllocator {
+    /// Allocates a frame on the stack.
+    ///
+    /// If the allocator crosses a page boundry it will attempt to return the `Frame`
+    /// mapped to the then unused stack page. If the allocator has nothing on the
+    /// stack and no pages are mapped to it, `frame_iter.next()` will be returned.
     fn allocate_frame(&mut self) -> Option<Frame> {
         if self.offset % 512 == 0 {
             // If we have no more frames on the current page, attempt
@@ -68,6 +85,14 @@ impl FrameAllocator for StackFrameAllocator {
         Some(frame)
     }
 
+    /// Deallocates a frame on the stack.
+    ///
+    /// This function pushes the frame to the stack. If it crosses a page boundry
+    /// and the next page is not mapped, it will map the provided frame to that page.
+    ///
+    /// # Safety
+    /// If the stack ever completely fills up (with 512Gb free) it will cause undefined
+    /// behaviour.
     fn deallocate_frame(&mut self, frame: Frame) {
         if self.offset % 512 == 0 && None == ACTIVE_TABLE.lock().translate_page(
             Page::containing_address(unsafe {

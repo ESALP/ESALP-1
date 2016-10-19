@@ -17,9 +17,13 @@ use self::pic::ChainedPICs;
 pub use self::keyboard::KEYBOARD;
 use vga_buffer;
 
+/// Abstraction of the PS/2 keyboard
 mod keyboard;
+/// IO abstractions in Rust
 mod cpuio;
+/// The programmable interrupt controller
 mod pic;
+/// The Interrupt Descriptor Table
 mod idt;
 
 extern "C" {
@@ -29,11 +33,17 @@ extern "C" {
     fn isr14();
     fn isr32();
     fn isr33();
+    /// Function that contains the `sti` instruction
     fn sti();
+    /// The kernel exit point
     fn KEXIT();
 }
 
 lazy_static! {
+    /// This is the Interrupt Descriptor Table that contains handlers for all
+    /// interrupt vectors that we support. Each handler is set in its lazy_static
+    /// definition and is not modified again.
+    // TODO Use const functions for initial handlers
     static ref IDT: idt::Idt = {
         let mut idt = idt::Idt::new();
 
@@ -48,11 +58,12 @@ lazy_static! {
     };
 }
 
+/// The Rust interface to the 8086 Programmable Interrupt Controller
 pub static PIC: Mutex<ChainedPICs> = Mutex::new(unsafe { ChainedPICs::new(0x20, 0x28) });
 
 pub fn init() {
-    IDT.load();
     unsafe {
+        IDT.load();
         {
             let mut pic = PIC.lock();
             pic.initialize();
@@ -61,6 +72,8 @@ pub fn init() {
     }
 }
 
+/// A struct that represents what the CPU pushes to the stack when an isr is
+/// called.
 #[repr(C)]
 pub struct ExceptionStackFrame {
     error_code: u64,
@@ -72,6 +85,7 @@ pub struct ExceptionStackFrame {
 }
 
 impl fmt::Debug for ExceptionStackFrame {
+    /// Pretty printing for the `ExceptionStackFrame` struct.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f,
                r#"
@@ -124,6 +138,8 @@ ExceptionStackFrame {{
 //  | FPU Error Interrupt           | 25 (0x18)  | Interrupt   | #FERR      | No            |
 //  | ----------------------------- | ---------- | ----------- | ---------- | ------------- |
 
+/// All assembly interrupt service routines call this function with their interrupt
+/// vector number.
 #[no_mangle]
 pub extern "C" fn rust_irq_handler(stack_frame: *const ExceptionStackFrame, isr_number: usize) {
     match isr_number {
@@ -137,6 +153,7 @@ pub extern "C" fn rust_irq_handler(stack_frame: *const ExceptionStackFrame, isr_
     }
 }
 
+/// Divide by zero handler
 extern "C" fn rust_de_handler(stack_frame: *const ExceptionStackFrame) {
     unsafe {
         panic!("EXCEPTION DIVIDE BY ZERO\n{:#?}", *stack_frame);
@@ -151,26 +168,35 @@ extern "C" fn breakpoint_handler(stack_frame: *const ExceptionStackFrame) {
     }
 }
 
+/// General protection fault handler
 extern "C" fn rust_gp_handler(stack_frame: *const ExceptionStackFrame) {
     unsafe {
         panic!("EXCEPTION GENERAL PROTECTION FAULT\n{:#?}", *stack_frame);
     }
 }
 
+/// Protection fault handler
 extern "C" fn rust_pf_handler(stack_frame: *const ExceptionStackFrame) {
     unsafe {
         panic!("EXCEPTION PAGE FAULT\n{:#?}", *stack_frame);
     }
 }
 
+/// Timer handler
+///
+/// This function flushes the log buffer whenever a timer interrupt happends
 extern "C" fn rust_timer_handler() {
-    // print to the screen
+    // Print to the screen
     vga_buffer::flush_screen();
     unsafe {
         PIC.lock().master.end_of_interrupt();
     }
 }
 
+/// Keyboard handler
+///
+/// This function pages the `Keyboard` port to get the key that was pressed, it then
+/// prints the associated byte to the screen and saves the state of the keyboard.
 extern "C" fn rust_kb_handler() {
     let mut kb = KEYBOARD.lock();
     match kb.port.read() {

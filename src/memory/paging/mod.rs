@@ -16,25 +16,37 @@ pub use self::mapper::Mapper;
 use self::temporary_page::TemporaryPage;
 use memory::{PAGE_SIZE, Frame, FrameAllocator};
 
+/// An entry in the page table.
 mod entry;
+/// Abstraction of the page table.
 mod table;
+/// A page to temporarily map a frame.
 mod temporary_page;
+/// An interface to the active page table.
 mod mapper;
 
+/// How many entries are in each table.
 const ENTRY_COUNT: usize = 512;
 
 pub type PhysicalAddress = usize;
 pub type VirtualAddress = usize;
 
+/// A representation of a virtual page.
 #[derive(Debug, Copy, Clone)]
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
 pub struct Page(usize);
 
 impl Page {
-    pub fn start_address(&self) -> usize {
+    /// Returns the first address in the `Page`
+    pub fn start_address(&self) -> VirtualAddress {
         self.0 * PAGE_SIZE
     }
 
+    /// Returns a `Page` containing the VirtualAddress given
+    ///
+    /// # Panics
+    /// A panic will occur if the address is not canonical. For the address
+    /// to be canonical the first 48 bits must be sign extended.
     pub fn containing_address(address: VirtualAddress) -> Page {
         // Address must be canonical
         assert!(address < 0x0000_8000_0000_0000 || address >= 0xffff_8000_0000_0000,
@@ -43,22 +55,35 @@ impl Page {
         Page(address / PAGE_SIZE)
     }
 
+    /// Returns `Page`'s index into the p4 table.
+    ///
+    /// The value must be from 0 to `ENTRY_COUNT`
     fn p4_index(&self) -> usize {
         (self.0 >> 27) & 0o777
     }
 
+    /// Returns `Page`'s index into the p3 table.
+    ///
+    /// The value must be from 0 to `ENTRY_COUNT`
     fn p3_index(&self) -> usize {
         (self.0 >> 18) & 0o777
     }
 
+    /// Returns `Page`'s index into the p2 table.
+    ///
+    /// The value must be from 0 to `ENTRY_COUNT`
     fn p2_index(&self) -> usize {
         (self.0 >> 9) & 0o777
     }
 
+    /// Returns `Page`'s index into the p1 table.
+    ///
+    /// The value must be from 0 to `ENTRY_COUNT`
     fn p1_index(&self) -> usize {
         (self.0 >> 0) & 0o777
     }
 
+    /// Returns a `Page` iterator from `start` to `end`.
     pub fn range_inclusive(start: Page, end: Page) -> PageIter {
         PageIter {
             start: start,
@@ -67,6 +92,7 @@ impl Page {
     }
 }
 
+/// An iterator acrossed `Page`s
 pub struct PageIter {
     start: Page,
     end: Page,
@@ -86,6 +112,7 @@ impl Iterator for PageIter {
     }
 }
 
+/// An abstraction to the Active table, dereferences to the `Mapper` type.
 pub struct ActivePageTable {
     mapper: Mapper,
 }
@@ -105,6 +132,11 @@ impl DerefMut for ActivePageTable {
 }
 
 impl ActivePageTable {
+    /// Creates a new `ActivePageTable`.
+    ///
+    /// # Safety
+    /// The page table must be recursively mapped, if it is not any methods using
+    /// the active page table will most likely produce undefined behaviour.
     pub unsafe fn new() -> ActivePageTable {
         ActivePageTable { mapper: Mapper::new() }
     }
@@ -162,11 +194,16 @@ impl ActivePageTable {
     }
 }
 
+/// A level 4 table that is not yet used
 pub struct InactivePageTable {
     p4_frame: Frame,
 }
 
 impl InactivePageTable {
+    /// Creates a new `InactivePageTable`
+    ///
+    /// The `frame` is consumed and used to hold the inactive level 4 table. The table
+    /// that is returned has recursive mapping, so activating it is safe.
     pub fn new(frame: Frame,
                active_table: &mut ActivePageTable,
                temporary_page: &mut TemporaryPage)
@@ -184,6 +221,11 @@ impl InactivePageTable {
     }
 }
 
+/// Remaps the kernel using the given `ActivePageTable`
+///
+/// Each kernel section is mapped to the higher half with the correct permissions.
+/// This function also identity maps the VGA text buffer and maps the multiboot2
+/// information structure to the higher half.
 pub fn remap_the_kernel<A>(active_table: &mut ActivePageTable,
                            allocator: &mut A,
                            boot_info: &BootInformation)

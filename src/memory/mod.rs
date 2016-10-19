@@ -17,17 +17,26 @@ use self::stack_frame_allocator::StackFrameAllocator;
 use self::paging::PhysicalAddress;
 
 
+/// Iterator acrossed physical frames.
 mod area_frame_iter;
+/// Physical frame allocator that uses a stack.
 mod stack_frame_allocator;
+/// Virtual paging module.
 mod paging;
 
+/// The kernel is linked to `KERNEL_BASE + 1M`
 pub const KERNEL_BASE: usize = 0xFFFF_FFFF_8000_0000;
+/// The size of a single page (or physical frame)
 pub const PAGE_SIZE: usize = 4096;
 
+// TODO Replace this with a dynamic heap
+/// The begining of the kernel heap
 const HEAP_START: usize = 0o000_001_000_0000;
+/// The size of the kernel heap
 const HEAP_SIZE: usize = 100 * 1024;
 
 lazy_static! {
+    /// A representation of the level 4 page table.
     static ref ACTIVE_TABLE: Mutex<paging::ActivePageTable> = {
         unsafe {
             Mutex::new( paging::ActivePageTable::new() )
@@ -35,6 +44,11 @@ lazy_static! {
     };
 }
 
+/// Initializes memory to a defined state.
+///
+/// It first finds, and prints out, the kernel start and finish. Then it
+/// remaps the kernel using correct permissions and finally allocates a
+/// space for and initializes the kernel heap
 pub fn init(boot_info: &BootInformation) {
     // For this function to be safe, it must only be called once.
     assert_has_not_been_called!("memory::init must only be called once!");
@@ -64,9 +78,6 @@ pub fn init(boot_info: &BootInformation) {
              boot_info.start_address() - KERNEL_BASE,
              boot_info.end_address() - KERNEL_BASE);
 
-    // TODO Make a static active table
-    let mut active_table = unsafe { paging::ActivePageTable::new() };
-
     let mut frame_allocator =
         unsafe {
             StackFrameAllocator::new(AreaFrameIter::new(kernel_start as usize,
@@ -76,7 +87,8 @@ pub fn init(boot_info: &BootInformation) {
                                                         memory_map_tag.memory_areas()))
         };
 
-    paging::remap_the_kernel(&mut active_table, &mut frame_allocator, boot_info);
+    // TODO remove active table argument
+    paging::remap_the_kernel(&mut ACTIVE_TABLE.lock(), &mut frame_allocator, boot_info);
 
     use self::paging::Page;
     use hole_list_allocator;
@@ -85,7 +97,7 @@ pub fn init(boot_info: &BootInformation) {
     let heap_end_page = Page::containing_address(HEAP_START + HEAP_SIZE - 1);
 
     for page in Page::range_inclusive(heap_start_page, heap_end_page) {
-        active_table.map(page, paging::WRITABLE, &mut frame_allocator);
+        ACTIVE_TABLE.lock().map(page, paging::WRITABLE, &mut frame_allocator);
     }
 
     unsafe {
@@ -93,22 +105,28 @@ pub fn init(boot_info: &BootInformation) {
     }
 }
 
+/// A representation of a physical frame.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Frame(usize);
 
 impl Frame {
-    fn containing_address(address: usize) -> Frame {
+    /// Returns a `Frame` containing the PhysicalAddress given.
+    fn containing_address(address: PhysicalAddress) -> Frame {
         Frame(address / PAGE_SIZE)
     }
 
+    /// Returns the first address in the `Frame`
     fn start_address(&self) -> PhysicalAddress {
         self.0 * PAGE_SIZE
     }
 
+    /// Clones the frame. This is used instead of `derive(Clone)` because cloning
+    /// `Frame` is not always safe.
     fn clone(&self) -> Frame {
         Frame(self.0)
     }
 
+    /// Returns a `Frame` iterator from `start` to `end`.
     fn range_inclusive(start: Frame, end: Frame) -> FrameIter {
         FrameIter {
             start: start,
@@ -117,6 +135,7 @@ impl Frame {
     }
 }
 
+/// An iterator acrossed `Frame`s.
 struct FrameIter {
     start: Frame,
     end: Frame,
@@ -135,6 +154,7 @@ impl Iterator for FrameIter {
     }
 }
 
+/// A trait for the ability to allocate and deallocate `Frame`s
 pub trait FrameAllocator {
     fn allocate_frame(&mut self) -> Option<Frame>;
     fn deallocate_frame(&mut self, frame: Frame);

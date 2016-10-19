@@ -13,19 +13,28 @@ use super::table::{self, Table, Level4};
 use memory::{PAGE_SIZE, Frame, FrameAllocator};
 use core::ptr::Unique;
 
+/// An interface to the active page table.
 pub struct Mapper {
+    /// This must be `Table::P4`
     p4: Unique<Table<Level4>>,
 }
 
 impl Mapper {
+    /// Returns a new Mapper.
+    ///
+    /// # Safety
+    /// The page table must be recursively mapped, if it is not any methods using
+    /// the Mapper will most likely produce undefined behaviour.
     pub unsafe fn new() -> Mapper {
         Mapper { p4: Unique::new(table::P4) }
     }
 
+    /// Returns a reference to the level 4 page table.
     pub fn p4(&self) -> &Table<Level4> {
         unsafe { self.p4.get() }
     }
 
+    /// Returns a mutable reference to the level 4 page table.
     pub fn p4_mut(&mut self) -> &mut Table<Level4> {
         unsafe { self.p4.get_mut() }
     }
@@ -38,6 +47,8 @@ impl Mapper {
             .map(|frame| frame.0 * PAGE_SIZE + offset)
     }
 
+    /// Translates a virtual page to the corresponding physical frame. Returns
+    /// `None` if the address is not mapped.
     pub fn translate_page(&self, page: Page) -> Option<Frame> {
         use super::entry::HUGE_PAGE;
 

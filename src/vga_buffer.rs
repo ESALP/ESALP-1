@@ -16,15 +16,22 @@ use core::sync::atomic::{ATOMIC_BOOL_INIT, ATOMIC_USIZE_INIT};
 use core::cell::UnsafeCell;
 use core::convert::AsMut;
 
+/// The number of rows in the VGA text buffer
 const BUFFER_HEIGHT: usize = 25;
+/// The number of columns in the VGA text buffer
 const BUFFER_WIDTH: usize = 80;
 
+/// All writing to the VGA text buffer _must_ go through this
+/// struct.
 static WRITER: Mutex<Writer> = Mutex::new(Writer {
     column_position: 0,
     color_code: ColorCode::new(Color::Pink, Color::Black),
     buffer: unsafe { Unique::new(0xb8000 as *mut _) },
 });
 
+/// This struct is a hack that allows AsMut to be used for a
+/// 4096 unit array. Only arrays up to size 32 impliment it
+/// by default.
 pub struct BufWrapper<T>([T; 4096]);
 
 impl<T> AsMut<[T]> for BufWrapper<T> {
@@ -33,6 +40,12 @@ impl<T> AsMut<[T]> for BufWrapper<T> {
     }
 }
 
+/// This log buffer is the public interface to the text buffer. The
+/// only public methodthat should be used is `write()` which is used
+/// in `print!()` and `println!()`. It is periodically flushed to the
+/// WRITER where it is printed to the text buffer. It is Sync, does
+/// not block, and is entirely thread safe. However, no writes can
+/// happen on the same time as a flush.
 pub static WRITE_BUF: LogBuffer<BufWrapper<u8>> = LogBuffer {
     buffer: UnsafeCell::new(BufWrapper::<u8> { 0: [0xff; 4096] }),
     position: ATOMIC_USIZE_INIT,
@@ -52,21 +65,29 @@ macro_rules! print {
 	});
 }
 
+/// Clears the VGA text buffer
 pub fn clear_screen() {
     for _ in 0..BUFFER_HEIGHT {
         println!("");
     }
 }
 
+/// Flushes `WRITE_BUF` to the screen, this locks `WRITE_BUF`
 pub fn flush_screen() {
     WRITER.lock().write_str(WRITE_BUF.extract());
     WRITE_BUF.clear();
 }
 
+/// Changes the color of the `WRITER` struct. This may produce
+/// unpredictable behaviour if `bg` has the bright bit (bit 3)
+/// set.
 pub fn change_color(fg: Color, bg: Color) {
     WRITER.lock().color(fg, bg);
 }
 
+/// An enum to represent the color of text. Each color is only
+/// four bytes, having a `Color` enum with any number greater
+/// than 0xf is undefined behaviour
 #[allow(dead_code)]
 #[repr(u8)]
 pub enum Color {
@@ -88,6 +109,7 @@ pub enum Color {
     White = 0xf,
 }
 
+/// A struct that abstracts writing to the VGA text buffer.
 struct Writer {
     column_position: usize,
     color_code: ColorCode,
@@ -95,6 +117,14 @@ struct Writer {
 }
 
 impl Writer {
+    /// Writes one ascii byte to the screen at the current position, and then advances
+    /// the position.
+    ///
+    /// ##Some bytes produce different behaviour, these are:
+    /// * `b'\0'`: Printing a NUL byte is a no-op.
+    /// * `b'\t'`: Four spaces are printed.
+    /// * `b'\b'`: Clears the current byte and goes back one position. _Does not move to previous
+    ///   lines_.
     fn write_byte(&mut self, byte: u8) {
         match byte {
             b'\0' => (),
@@ -118,20 +148,25 @@ impl Writer {
         }
     }
 
+    /// Writes a `&str` to the screen
     fn write_str(&mut self, s: &str) {
         for byte in s.bytes() {
             self.write_byte(byte);
         }
     }
 
+    /// Changes the color of the buffer
     fn color(&mut self, fg: Color, bg: Color) {
         self.color_code = ColorCode::new(fg, bg);
     }
 
+    /// Gets a reference to the buffer
     fn buffer(&mut self) -> &mut Buffer {
         unsafe { self.buffer.get_mut() }
     }
 
+    /// Moves the position to the next line, similar to printing
+    /// `b"\n\r"` in a terminal
     fn new_line(&mut self) {
         for row in 0..(BUFFER_HEIGHT - 1) {
             let buffer = self.buffer();
@@ -141,6 +176,7 @@ impl Writer {
         self.column_position = 0;
     }
 
+    /// Moves the position back one place and clears the current byte
     fn back_space(&mut self) {
         let row = BUFFER_HEIGHT - 1;
         let col = self.column_position;
@@ -155,6 +191,7 @@ impl Writer {
         }
     }
 
+    /// Clears the entire current row
     fn clear_row(&mut self, row: usize) {
         let blank = ScreenChar {
             ascii_character: b' ',
@@ -165,6 +202,10 @@ impl Writer {
 }
 
 impl ::core::fmt::Write for Writer {
+    /// Writes a `&str` to the screen
+    ///
+    /// # Errors
+    /// Always returns Ok(())
     fn write_str(&mut self, s: &str) -> ::core::fmt::Result {
         for byte in s.bytes() {
             self.write_byte(byte);
@@ -173,15 +214,19 @@ impl ::core::fmt::Write for Writer {
     }
 }
 
+/// A color code containing a foreground and background `Color`
 #[derive(Clone, Copy)]
 struct ColorCode(u8);
 
 impl ColorCode {
+    /// Combines `fg` and `bg` to form a ColorCode
     const fn new(fg: Color, bg: Color) -> ColorCode {
         ColorCode((bg as u8) << 4 | (fg as u8))
     }
 }
 
+/// A representation of one character on the VGA text buffer consisting
+/// of both a ascii byte and a `ColorCode`
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct ScreenChar {
@@ -189,6 +234,11 @@ struct ScreenChar {
     color_code: ColorCode,
 }
 
+/// A representation of the entire VGA text buffer in memory
+///
+/// # Safety
+/// The only VGA text buffer used by the kernel is the one
+/// at `0xb8000`, therefore this struct is only valid there.
 struct Buffer {
     chars: [[ScreenChar; BUFFER_WIDTH]; BUFFER_HEIGHT],
 }

@@ -11,12 +11,16 @@ use super::{Page, ActivePageTable, VirtualAddress};
 use super::table::{Table, Level1};
 use memory::{Frame, FrameAllocator};
 
+/// A page to temporarily map a frame.
 pub struct TemporaryPage {
+    /// The page itself.
     page: Page,
+    /// A temporary allocator.
     allocator: TinyAllocator,
 }
 
 impl TemporaryPage {
+    /// Initializes a `TinyAllocator` and returns the new `TemporaryPage`
     pub fn new<A>(page: Page, allocator: &mut A) -> TemporaryPage
         where A: FrameAllocator
     {
@@ -53,16 +57,21 @@ impl TemporaryPage {
         unsafe { &mut *(self.map(frame, active_table) as *mut Table<Level1>) }
     }
 
-    pub fn drop<A>(&mut self, allocator: &mut A)
+    /// This is a hack that drops the `TemporaryPage` without leaking frames. The
+    /// drop trait cannot be used because this function needs a `FrameAllocator`
+    pub fn drop<A>(mut self, allocator: &mut A)
         where A: FrameAllocator
     {
         self.allocator.drop(allocator);
     }
 }
 
+/// A `FrameAllocator` that can allocate up to three frames: enough for a p3, p2 and
+/// p1 table.
 struct TinyAllocator([Option<Frame>; 3]);
 
 impl TinyAllocator {
+    /// Creates a new TinyAllocator using the current allocator.
     fn new<A>(allocator: &mut A) -> TinyAllocator
         where A: FrameAllocator
     {
@@ -70,7 +79,9 @@ impl TinyAllocator {
         TinyAllocator([f(), f(), f()])
     }
 
-    fn drop<A>(&mut self, allocator: &mut A)
+    /// This is a hack that drops the `TinyAllocator` without leaking frames. The
+    /// drop trait cannot be used because this function needs a `FrameAllocator`
+    fn drop<A>(mut self, allocator: &mut A)
         where A: FrameAllocator
     {
         for frame_option in &mut self.0 {
@@ -83,6 +94,8 @@ impl TinyAllocator {
 }
 
 impl FrameAllocator for TinyAllocator {
+    /// Allocates any one of the three frames to the caller. If all three are used
+    /// it returns `None`.
     fn allocate_frame(&mut self) -> Option<Frame> {
         for frame_option in &mut self.0 {
             if frame_option.is_some() {
@@ -92,6 +105,11 @@ impl FrameAllocator for TinyAllocator {
         None
     }
 
+    /// Saves the frame to any unused space in the allocator.
+    ///
+    /// # Panics
+    /// This function panics if it is called when all frames are already full. It
+    /// cannot be used to hold more than three frames.
     fn deallocate_frame(&mut self, frame: Frame) {
         for frame_option in &mut self.0 {
             if frame_option.is_none() {

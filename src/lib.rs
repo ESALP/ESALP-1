@@ -17,7 +17,9 @@
 
 // crates.io crates
 extern crate rlibc;
+/// Bare metal Mutex
 extern crate spin;
+/// Abstraction of the multiboot2 info structure
 extern crate multiboot2;
 #[macro_use]
 extern crate x86;
@@ -26,28 +28,41 @@ extern crate bit_field;
 extern crate bitflags;
 #[macro_use]
 extern crate lazy_static;
+/// A macro for running a function only once
 #[macro_use]
 extern crate once;
 
 // Features without allocation
+/// Thread safe log buffer
 extern crate log_buffer;
 
 // Features involving allocation
+/// Heap allocator for rust code
 extern crate hole_list_allocator;
 extern crate alloc;
+/// Higher-level data structures that use the heap
 #[macro_use]
 extern crate collections;
 
 #[macro_use]
+/// Abstraction of the VGA text buffer
 mod vga_buffer;
+/// Memory management
 mod memory;
+/// Interrupts code
 // This must be pub to expose functions to the linker
 pub mod interrupts;
 
 extern "C" {
+    /// The kernel exit point. It disables interrupts, enters an infinite loop,
+    /// and halts the processor
     fn KEXIT() -> !;
 }
 
+/// The Rust entry point
+///
+/// This clears the screen, initializes each module and enters an infinite
+/// loop.
 #[no_mangle]
 pub extern "C" fn rust_main(multiboot_info_address: usize) {
     vga_buffer::clear_screen();
@@ -74,7 +89,10 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) {
     println!("Try to write some things!");
     vga_buffer::change_color(vga_buffer::Color::White, vga_buffer::Color::Black);
 
-    loop {}
+    loop {
+        // We are waiting for interrupts here, so don't bother doing anything
+        unsafe { asm!("hlt") }
+    }
 }
 
 #[allow(non_snake_case)]
@@ -85,6 +103,7 @@ pub extern "C" fn _Unwind_Resume() -> ! {
 
 #[lang = "eh_personality"]
 extern "C" fn eh_personality() {}
+/// Runs during a `panic!()`
 #[lang = "panic_fmt"]
 extern "C" fn panic_fmt(args: ::core::fmt::Arguments, file: &'static str, line: u32) -> ! {
     vga_buffer::change_color(vga_buffer::Color::Red, vga_buffer::Color::Black);

@@ -10,6 +10,7 @@
 use memory::Frame;
 use multiboot2::{MemoryAreaIter, MemoryArea};
 
+/// An iterator acrossed physical frames using memory areas.
 pub struct AreaFrameIter {
     next_free_frame: Frame,
     current_area: Option<&'static MemoryArea>,
@@ -21,6 +22,7 @@ pub struct AreaFrameIter {
 }
 
 impl AreaFrameIter {
+    /// Returns a new `AreaFrameIter`
     pub fn new(kernel_start: usize,
                kernel_end: usize,
                multiboot_start: usize,
@@ -40,6 +42,7 @@ impl AreaFrameIter {
         iter
     }
 
+    /// Looks for free `Frame`s in the next memory area
     fn choose_next_area(&mut self) {
         self.current_area = self.areas
             .clone()
