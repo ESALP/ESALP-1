@@ -47,7 +47,7 @@ impl<T> AsMut<[T]> for BufWrapper<T> {
 /// not block, and is entirely thread safe. However, no writes can
 /// happen on the same time as a flush.
 pub static WRITE_BUF: LogBuffer<BufWrapper<u8>> = LogBuffer {
-    buffer: UnsafeCell::new(BufWrapper::<u8> { 0: [0xff; 4096] }),
+    buffer: UnsafeCell::new(BufWrapper::<u8>([0xff; 4096])),
     position: ATOMIC_USIZE_INIT,
     lock: ATOMIC_BOOL_INIT,
 };
