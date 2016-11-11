@@ -16,7 +16,7 @@
 
 use memory::paging::entry::*;
 use memory::paging::ENTRY_COUNT;
-use memory::paging::{VirtualAddress, PhysicalAddress};
+use memory::paging::VirtualAddress;
 use memory::FrameAllocator;
 
 use core::marker::PhantomData;

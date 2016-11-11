@@ -10,10 +10,11 @@
 use core::ops::{Deref, DerefMut};
 
 use multiboot2::{BootInformation, StringTable};
+use spin::Mutex;
 
 pub use self::entry::*;
 pub use self::mapper::Mapper;
-use self::temporary_page::TemporaryPage;
+pub use self::temporary_page::{TemporaryPage, TinyAllocator};
 use memory::{PAGE_SIZE, Frame, FrameAllocator};
 
 /// An entry in the page table.
@@ -28,7 +29,23 @@ mod mapper;
 /// How many entries are in each table.
 const ENTRY_COUNT: usize = 512;
 
+/// This is the _only_ ActivePageTable that should be used in the system. Any others
+/// would violate the assumptions of `Unique`.
+pub static ACTIVE_TABLE: Mutex<ActivePageTable> = Mutex::new(unsafe {
+    ActivePageTable::new()
+});
+
+// TODO FIXME Make conversions between the PhysicalAddress and VirtualAddress types
+// unsafe. All addresses in this module have to be explicitly physical or virtual.
+//
+// Possibly make physical and virtual traits and apply them to numbers, pointers,
+// etc.?
+/// A _physical_ address on the machine. *_These should only be known to the kernel_*.
+/// The userspace should never recieve a physical addresss.
 pub type PhysicalAddress = usize;
+/// A _virtual_ address on the machine. _All_ pointers are of this type. It is
+/// undefined behaviour to convert a virtual to a physical address except through
+/// the specific page table methods.
 pub type VirtualAddress = usize;
 
 /// A representation of a virtual page.
@@ -137,7 +154,7 @@ impl ActivePageTable {
     /// # Safety
     /// The page table must be recursively mapped, if it is not any methods using
     /// the active page table will most likely produce undefined behaviour.
-    pub unsafe fn new() -> ActivePageTable {
+    pub const unsafe fn new() -> ActivePageTable {
         ActivePageTable { mapper: Mapper::new() }
     }
 
@@ -300,37 +317,49 @@ pub fn remap_the_kernel<A>(active_table: &mut ActivePageTable,
     println!("New guard page at {:#x}", old_p4_page.start_address());
 }
 
-pub fn test_paging<A>(allocator: &mut A)
+//TODO Replace allocator field with static allocator for public interface.
+pub fn map_to<A>(page: Page,
+                 frame: Frame,
+                 flags: EntryFlags,
+                 allocator: &mut A)
     where A: FrameAllocator
 {
-    let mut page_table = unsafe { ActivePageTable::new() };
+    let mut temp_alloc = TinyAllocator::new(|| allocator.allocate_frame());
 
-    // Address 0 is mapped
-    println!("Some = {:?}", page_table.translate(0));
-    // Second P1 entry
-    println!("Some = {:?}", page_table.translate(4096));
-    // Second P2 entry
-    println!("Some = {:?}", page_table.translate(4096 * 512));
-    // 300th P2 entry
-    println!("Some = {:?}", page_table.translate(4096 * 512 * 300));
-    // Second P3 entry
-    println!("None = {:?}", page_table.translate(4096 * 512 * 512));
-    // Last entry
-    println!("Some = {:?}", page_table.translate(4096 * 512 * 512 - 1));
+    ACTIVE_TABLE.lock().map_to(page, frame, flags, &mut temp_alloc);
 
-    // Test map_to
-    let addr = 4096 * 512 * 512 * 42; // 42th p3 entry
-    let page = Page::containing_address(addr);
-    let frame = allocator.allocate_frame()
-        .expect("No more frames :(");
-    println!("None = {:?}, map to {:?}",
-             page_table.translate(addr),
-             frame);
-    page_table.map_to(page, frame, EntryFlags::empty(), allocator);
-    println!("Some = {:?}", page_table.translate(addr));
-    println!("Next free frame: {:?}", allocator.allocate_frame());
-
-    // Test unmap
-    page_table.unmap(Page::containing_address(addr), allocator);
-    println!("None = {:?}", page_table.translate(addr));
+    temp_alloc.drop(allocator);
 }
+
+//pub fn test_paging<A>(page_table: &mut ActivePageTable, allocator: &mut A)
+//    where A: FrameAllocator
+//{
+//    // Address 0 is mapped
+//    println!("Some = {:?}", page_table.translate(0));
+//    // Second P1 entry
+//    println!("Some = {:?}", page_table.translate(4096));
+//    // Second P2 entry
+//    println!("Some = {:?}", page_table.translate(4096 * 512));
+//    // 300th P2 entry
+//    println!("Some = {:?}", page_table.translate(4096 * 512 * 300));
+//    // Second P3 entry
+//    println!("None = {:?}", page_table.translate(4096 * 512 * 512));
+//    // Last entry
+//    println!("Some = {:?}", page_table.translate(4096 * 512 * 512 - 1));
+//
+//    // Test map_to
+//    let addr = 4096 * 512 * 512 * 12; // 12th p3 entry
+//    let page = Page::containing_address(addr);
+//    let frame = allocator.allocate_frame()
+//        .expect("No more frames :(");
+//    println!("None = {:?}, map to {:?}",
+//             page_table.translate(addr),
+//             frame);
+//    map_to(page, frame, EntryFlags::empty(), allocator);
+//    println!("Some = {:?}", page_table.translate(addr));
+//    println!("Next free frame: {:?}", allocator.allocate_frame());
+//
+//    // Test unmap
+//    unmap(Page::containing_address(addr), allocator);
+//    println!("None = {:?}", page_table.translate(addr));
+//}

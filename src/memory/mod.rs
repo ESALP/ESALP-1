@@ -10,7 +10,6 @@
 #![allow(dead_code,unused_variables)]
 
 use multiboot2::BootInformation;
-use spin::Mutex;
 
 pub use self::area_frame_iter::AreaFrameIter;
 use self::stack_frame_allocator::StackFrameAllocator;
@@ -34,15 +33,6 @@ pub const PAGE_SIZE: usize = 4096;
 const HEAP_START: usize = 0o000_001_000_0000;
 /// The size of the kernel heap
 const HEAP_SIZE: usize = 100 * 1024;
-
-lazy_static! {
-    /// A representation of the level 4 page table.
-    static ref ACTIVE_TABLE: Mutex<paging::ActivePageTable> = {
-        unsafe {
-            Mutex::new( paging::ActivePageTable::new() )
-        }
-    };
-}
 
 /// Initializes memory to a defined state.
 ///
@@ -87,8 +77,10 @@ pub fn init(boot_info: &BootInformation) {
                                                         memory_map_tag.memory_areas()))
         };
 
-    // TODO remove active table argument
-    paging::remap_the_kernel(&mut ACTIVE_TABLE.lock(), &mut frame_allocator, boot_info);
+    // TODO FIXME replace with static active table
+    let mut temp_active_table = unsafe {paging::ActivePageTable::new()};
+
+    paging::remap_the_kernel(&mut temp_active_table, &mut frame_allocator, boot_info);
 
     use self::paging::Page;
     use hole_list_allocator;
@@ -97,7 +89,7 @@ pub fn init(boot_info: &BootInformation) {
     let heap_end_page = Page::containing_address(HEAP_START + HEAP_SIZE - 1);
 
     for page in Page::range_inclusive(heap_start_page, heap_end_page) {
-        ACTIVE_TABLE.lock().map(page, paging::WRITABLE, &mut frame_allocator);
+        temp_active_table.map(page, paging::WRITABLE, &mut frame_allocator);
     }
 
     unsafe {
@@ -158,4 +150,12 @@ impl Iterator for FrameIter {
 pub trait FrameAllocator {
     fn allocate_frame(&mut self) -> Option<Frame>;
     fn deallocate_frame(&mut self, frame: Frame);
+
+    fn transfer_frames<A>(&mut self, other: &mut A)
+        where A: FrameAllocator
+    {
+        while let Some(frame) = other.allocate_frame() {
+            self.deallocate_frame(frame);
+        }
+    }
 }

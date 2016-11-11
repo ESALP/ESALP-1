@@ -25,7 +25,7 @@ impl Mapper {
     /// # Safety
     /// The page table must be recursively mapped, if it is not any methods using
     /// the Mapper will most likely produce undefined behaviour.
-    pub unsafe fn new() -> Mapper {
+    pub const unsafe fn new() -> Mapper {
         Mapper { p4: Unique::new(table::P4) }
     }
 

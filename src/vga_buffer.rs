@@ -41,7 +41,7 @@ impl<T> AsMut<[T]> for BufWrapper<T> {
 }
 
 /// This log buffer is the public interface to the text buffer. The
-/// only public methodthat should be used is `write()` which is used
+/// only public method that should be used is `write()` which is used
 /// in `print!()` and `println!()`. It is periodically flushed to the
 /// WRITER where it is printed to the text buffer. It is Sync, does
 /// not block, and is entirely thread safe. However, no writes can
@@ -53,27 +53,34 @@ pub static WRITE_BUF: LogBuffer<BufWrapper<u8>> = LogBuffer {
 };
 
 macro_rules! println {
-	($fmt:expr) => (print!(concat!($fmt, "\n")));
-	($fmt:expr, $($arg:tt)*) => (print!(concat!($fmt, "\n"), $($arg)*));
+    ($fmt:expr) => (print!(concat!($fmt, "\n")));
+    ($fmt:expr, $($arg:tt)*) => (print!(concat!($fmt, "\n"), $($arg)*));
 }
 
 macro_rules! print {
-	($($arg:tt)*) => ({
-		use core::fmt::Write;
-		let mut wb = &($crate::vga_buffer::WRITE_BUF);
-		wb.write_fmt(format_args!($($arg)*)).unwrap();
-	});
+    ($($arg:tt)*) => ({
+        use core::fmt::Write;
+        let mut wb = &($crate::vga_buffer::WRITE_BUF);
+        wb.write_fmt(format_args!($($arg)*)).unwrap();
+    });
 }
 
 /// Clears the VGA text buffer
 pub fn clear_screen() {
-    for _ in 0..BUFFER_HEIGHT {
-        println!("");
+    // The screen clear has to be done in one print for it to clear the screen with
+    // complete gurentee.
+    unsafe {
+        println!("{}",::core::str::from_utf8_unchecked(&[b'\n'; BUFFER_HEIGHT]));
     }
 }
 
 /// Flushes `WRITE_BUF` to the screen, this locks `WRITE_BUF`
 pub fn flush_screen() {
+    if WRITER.try_lock().is_none() {
+        // Screen is <probably> already being flushed so just bail out.
+        return;
+    }
+    // TODO these operations have to be atomic together
     WRITER.lock().write_str(WRITE_BUF.extract());
     WRITE_BUF.clear();
 }

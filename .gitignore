@@ -8,6 +8,7 @@
 *.rlib
 
 #cargo
+/.cargo/
 /target/
 Cargo.lock
 

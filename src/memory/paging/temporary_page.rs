@@ -26,7 +26,7 @@ impl TemporaryPage {
     {
         TemporaryPage {
             page: page,
-            allocator: TinyAllocator::new(allocator),
+            allocator: TinyAllocator::new(|| allocator.allocate_frame()),
         }
     }
 
@@ -68,28 +68,68 @@ impl TemporaryPage {
 
 /// A `FrameAllocator` that can allocate up to three frames: enough for a p3, p2 and
 /// p1 table.
-struct TinyAllocator([Option<Frame>; 3]);
+pub struct TinyAllocator([Option<Frame>; 3]);
 
 impl TinyAllocator {
-    /// Creates a new TinyAllocator using the current allocator.
-    fn new<A>(allocator: &mut A) -> TinyAllocator
-        where A: FrameAllocator
+    /// Constructs a new TinyAllocator using the given closure.
+    pub fn new<F>(mut f: F) -> TinyAllocator
+        where F: FnMut() -> Option<Frame>
     {
-        let mut f = || allocator.allocate_frame();
         TinyAllocator([f(), f(), f()])
+    }
+
+    /// Constructs an empty TinyAllocator.
+    pub const fn empty() -> TinyAllocator {
+        TinyAllocator([None, None, None])
+    }
+
+    /// Replaces all `None` fields of the allocator with new `Frames` from the given
+    /// closure.
+    pub fn refill<F>(&mut self, mut f: F)
+        where F: FnMut() -> Frame
+    {
+        for frame_option in &mut self.0 {
+            if frame_option.is_none() {
+                *frame_option = Some(f());
+            }
+        }
+    }
+
+    /// Flushes each frame in the allocator to the given closure.
+    pub fn flush<F>(&mut self, mut f: F)
+        where F: FnMut(Frame)
+    {
+        for frame_option in &mut self.0 {
+            if let Some(ref frame) = *frame_option {
+                // Cloning is safe in this context because the original is
+                // immediatly destroyed after the clone.
+                f(frame.clone());
+            }
+            *frame_option = None;
+        }
+    }
+
+    /// Returns `true` if the allocator is full.
+    pub fn is_full(&self) -> bool {
+        for frame_option in &self.0 {
+            if frame_option.is_none() {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Returns `true` if the allocator is empty.
+    pub fn is_empty(&self) -> bool {
+        self.0 == [None, None, None]
     }
 
     /// This is a hack that drops the `TinyAllocator` without leaking frames. The
     /// drop trait cannot be used because this function needs a `FrameAllocator`
-    fn drop<A>(mut self, allocator: &mut A)
+    pub fn drop<A>(&mut self, allocator: &mut A)
         where A: FrameAllocator
     {
-        for frame_option in &mut self.0 {
-            if let Some(ref frame) = *frame_option {
-                allocator.deallocate_frame(frame.clone());
-            }
-            *frame_option = None;
-        }
+        allocator.transfer_frames(self);
     }
 }
 

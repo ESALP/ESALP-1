@@ -10,19 +10,23 @@
 use core::ptr::Unique;
 
 use memory::{self, Frame, FrameAllocator};
-use memory::paging::Page;
 use memory::area_frame_iter::AreaFrameIter;
-use memory::ACTIVE_TABLE;
+use memory::paging::{Page, VirtualAddress};
+use memory::paging::ACTIVE_TABLE;
+use memory::paging::TinyAllocator;
 
 /// An allocator for physical frames using the stack.
 pub struct StackFrameAllocator {
-    /// The allocator will get frames from this field if it has no more frames.
-    frame_iter: AreaFrameIter,
     /// This is a `Frame` pointer to the bottom of the stack. It is always at
     /// `0o177777_777_777_000_000_0000`, which is right above the kernel table.
     stack_base: Unique<Frame>,
     /// The offset to the current head of the stack.
     offset: isize,
+    /// The allocator will get frames from this field if it has no more frames.
+    frame_iter: AreaFrameIter,
+    /// A small allocator that can be used for holding excess frames that are needed
+    /// for mapping the page table.
+    temp_alloc: TinyAllocator,
 }
 
 impl StackFrameAllocator {
@@ -33,22 +37,14 @@ impl StackFrameAllocator {
     /// with the same base address, and one may already be initialized. Thus it is
     /// up to the caller to make sure that the stack is not yet initialized, or is in
     /// a defined state before calling
-    pub unsafe fn new(area_frame_iter: AreaFrameIter) -> StackFrameAllocator {
+    pub const unsafe fn new(area_frame_iter: AreaFrameIter) -> StackFrameAllocator {
         // The stack grows upward from the kernel page to the top of memory
-        let mut allocator = StackFrameAllocator {
-            frame_iter: area_frame_iter,
+        StackFrameAllocator {
             stack_base: Unique::new(0o177777_777_777_000_000_0000 as *mut Frame),
             offset: 0,
-        };
-        let mut active_table = ACTIVE_TABLE.lock();
-
-        active_table.map_to(
-            Page::containing_address(allocator.stack_base.get() as *const _ as usize),
-            allocator.frame_iter.next().unwrap(),
-            memory::paging::WRITABLE,
-            &mut allocator);
-
-        allocator
+            frame_iter: area_frame_iter,
+            temp_alloc: TinyAllocator::empty(),
+        }
     }
 }
 impl FrameAllocator for StackFrameAllocator {
@@ -57,15 +53,29 @@ impl FrameAllocator for StackFrameAllocator {
     /// If the allocator crosses a page boundry it will attempt to return the `Frame`
     /// mapped to the then unused stack page. If the allocator has nothing on the
     /// stack and no pages are mapped to it, `frame_iter.next()` will be returned.
+    ///
+    /// # Blocking
+    /// `allocate frame` may block if `ACTIVE_TABLE` is being used when it is
+    /// called.
     fn allocate_frame(&mut self) -> Option<Frame> {
         if self.offset % 512 == 0 {
             // If we have no more frames on the current page, attempt
             // to return the frame that is used for the stack
-            if let Some(frame) = ACTIVE_TABLE.lock().translate_page(
-                Page::containing_address(unsafe {
-                    self.stack_base.offset(self.offset) as *const _ as usize
-                }))
+            let stack_page = Page::containing_address(unsafe {
+                self.stack_base.offset(self.offset) as *const _ as VirtualAddress
+            });
+            if let Some(frame) = ACTIVE_TABLE.lock().translate_page(stack_page)
             {
+                // See if there are any frames in the temp allocator
+                if let Some(frame) = self.temp_alloc.allocate_frame() {
+                    // If there is one, return it. Unmapping will not work if
+                    // there are any frames in the allocator.
+                    return Some(frame);
+                }
+
+                // If not then unmap the stack frame.
+                ACTIVE_TABLE.lock().unmap(stack_page, &mut self.temp_alloc);
+
                 return Some(frame)
             }
             else if self.offset == 0 {
@@ -79,8 +89,8 @@ impl FrameAllocator for StackFrameAllocator {
         // This means that there are frames on the stack and it is
         // not using any pages it shouldn't. Just pop one off and
         // return it.
-        let frame = unsafe { ::core::ptr::read(self.stack_base.offset(self.offset - 1)) };
         self.offset -= 1;
+        let frame = unsafe { ::core::ptr::read(self.stack_base.offset(self.offset)) };
 
         Some(frame)
     }
@@ -93,23 +103,31 @@ impl FrameAllocator for StackFrameAllocator {
     /// # Safety
     /// If the stack ever completely fills up (with 512Gb free) it will cause undefined
     /// behaviour.
+    ///
+    /// # Blocking
+    /// `deallocate frame` _may_ block if `ACTIVE_TABLE` is being used when it is
+    /// called.
     fn deallocate_frame(&mut self, frame: Frame) {
-        if self.offset % 512 == 0 && None == ACTIVE_TABLE.lock().translate_page(
-            Page::containing_address(unsafe {
-                self.stack_base.offset(self.offset) as *const _ as usize
-            }))
+        let stack_page = Page::containing_address(unsafe {
+            self.stack_base.offset(self.offset) as *const _ as VirtualAddress
+        });
+        if self.offset % 512 == 0 && None == ACTIVE_TABLE.lock()
+            .translate_page(stack_page)
         {
-            // If we're on a page boundry, make sure that the page is mapped. If
-            // it is not then map it with the frame we are given.
-            ACTIVE_TABLE.lock()
-                .map_to(Page::containing_address(unsafe {
-                            self.stack_base.offset(self.offset) as *const _ as usize
-                        }),
-                        frame,
-                        memory::paging::WRITABLE,
-                        &mut *self);
+            // Check to see if the tiny allocator is full.
+            if !self.temp_alloc.is_full() {
+                // If it's not then we can't map a new page with it. Pass the
+                // deallocation to it.
+                self.temp_alloc.deallocate_frame(frame);
+                return;
+            }
+            // If it is then map the frame to the stack.
+            ACTIVE_TABLE.lock().map_to(stack_page,
+                                       frame,
+                                       memory::paging::WRITABLE,
+                                       &mut self.temp_alloc);
         } else {
-
+            // Just push a frame on the stack.
             unsafe {
                 *self.stack_base.offset(self.offset) = frame;
             }
