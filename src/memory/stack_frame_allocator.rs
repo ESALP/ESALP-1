@@ -62,7 +62,7 @@ impl FrameAllocator for StackFrameAllocator {
             // If we have no more frames on the current page, attempt
             // to return the frame that is used for the stack
             let stack_page = Page::containing_address(unsafe {
-                self.stack_base.offset(self.offset) as *const _ as VirtualAddress
+                self.stack_base.as_ptr().offset(self.offset) as *const _ as VirtualAddress
             });
             if let Some(frame) = ACTIVE_TABLE.lock().translate_page(stack_page)
             {
@@ -90,7 +90,7 @@ impl FrameAllocator for StackFrameAllocator {
         // not using any pages it shouldn't. Just pop one off and
         // return it.
         self.offset -= 1;
-        let frame = unsafe { ::core::ptr::read(self.stack_base.offset(self.offset)) };
+        let frame = unsafe { ::core::ptr::read(self.stack_base.as_ptr().offset(self.offset)) };
 
         Some(frame)
     }
@@ -109,7 +109,7 @@ impl FrameAllocator for StackFrameAllocator {
     /// called.
     fn deallocate_frame(&mut self, frame: Frame) {
         let stack_page = Page::containing_address(unsafe {
-            self.stack_base.offset(self.offset) as *const _ as VirtualAddress
+            self.stack_base.as_ptr().offset(self.offset) as *const _ as VirtualAddress
         });
         if self.offset % 512 == 0 && None == ACTIVE_TABLE.lock()
             .translate_page(stack_page)
@@ -129,7 +129,7 @@ impl FrameAllocator for StackFrameAllocator {
         } else {
             // Just push a frame on the stack.
             unsafe {
-                *self.stack_base.offset(self.offset) = frame;
+                *self.stack_base.as_ptr().offset(self.offset) = frame;
             }
             self.offset += 1;
         }

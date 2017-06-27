@@ -7,12 +7,14 @@
 // This file may not be copied, modified, or distributed
 // except according to those terms.
 
+#![allow(non_snake_case)]
+
 #![feature(lang_items)]
-#![feature(alloc, collections)]
+#![feature(alloc)]
 #![feature(const_fn, unique)]
 #![feature(associated_type_defaults)]
 #![feature(asm)]
-#![feature(relaxed_adts)]
+#![feature(abi_x86_interrupt)]
 #![no_std]
 
 // crates.io crates
@@ -21,8 +23,7 @@ extern crate rlibc;
 extern crate spin;
 /// Abstraction of the multiboot2 info structure
 extern crate multiboot2;
-#[macro_use]
-extern crate x86;
+extern crate x86_64;
 extern crate bit_field;
 #[macro_use]
 extern crate bitflags;
@@ -39,10 +40,8 @@ extern crate log_buffer;
 // Features involving allocation
 /// Heap allocator for rust code
 extern crate hole_list_allocator;
-extern crate alloc;
 /// Higher-level data structures that use the heap
-#[macro_use]
-extern crate collections;
+extern crate alloc;
 
 #[macro_use]
 /// Abstraction of the VGA text buffer
@@ -104,8 +103,9 @@ pub extern "C" fn _Unwind_Resume() -> ! {
 #[lang = "eh_personality"]
 extern "C" fn eh_personality() {}
 /// Runs during a `panic!()`
+#[no_mangle]
 #[lang = "panic_fmt"]
-extern "C" fn panic_fmt(args: ::core::fmt::Arguments, file: &'static str, line: u32) -> ! {
+pub extern "C" fn panic_fmt(args: ::core::fmt::Arguments, file: &'static str, line: u32) -> ! {
     vga_buffer::change_color(vga_buffer::Color::Red, vga_buffer::Color::Black);
     println!("\n\nPANIC at {}:{}", file, line);
     println!("\t{}", args);

@@ -10,6 +10,7 @@ once = "0.3.2"
 rlibc = "0.1.4"
 spin = "0.4.4"
 multiboot2 = "0.3.0"
+x86_64 = "0.1.2"
 
 [dependencies.hole_list_allocator]
 path = "libs/hole_list_allocator"
@@ -21,19 +22,5 @@ version = "0.2.1"
 [dependencies.log_buffer]
 git = "https://github.com/ESALP/rust-log_buffer"
 
-[dependencies.x86]
-default-features = false
-version = "0.7.1"
-
 [lib]
 crate-type = ["staticlib"]
-
-[profile]
-
-[profile.dev]
-panic = "abort"
-
-[profile.release]
-panic = "abort"
-
-[workspace]

@@ -167,29 +167,26 @@ impl ActivePageTable {
                    f: F)
         where F: FnOnce(&mut Mapper)
     {
-        use x86::{tlb, controlregs};
-        let flush_tlb = || unsafe { tlb::flush_all() };
+        use x86_64::registers::control_regs;
+        use x86_64::instructions::tlb;
 
         {
             // Save table
-            let backup = Frame::containing_address(// Safe iff the processor is in ring 0
-                                                   // during execution. If it's not there
-                                                   // are bigger problems.
-                                                   unsafe { controlregs::cr3() } as usize);
+            let backup = Frame::containing_address(control_regs::cr3().0 as usize);
 
             // Map temporary_page to the current table
             let p4_table = temporary_page.map_table_frame(backup.clone(), self);
 
             // Overwrite recursive mapping
             self.p4_mut()[510].set(table.p4_frame.clone(), PRESENT | WRITABLE);
-            flush_tlb();
+            tlb::flush_all();
 
             // Execute the closure in the new context
             f(self);
 
             // Restore recursive mapping
             p4_table[510].set(backup, PRESENT | WRITABLE);
-            flush_tlb();
+            tlb::flush_all();
         }
 
         temporary_page.unmap(self);
@@ -198,14 +195,15 @@ impl ActivePageTable {
     /// Activates the `InactivePageTable` given.
     /// Returns the previous ActivePageTable
     pub fn switch(&mut self, new_table: InactivePageTable) -> InactivePageTable {
-        use x86::controlregs;
+        use x86_64::PhysicalAddress;
+        use x86_64::registers::control_regs;
 
         let old_table = InactivePageTable {
-            p4_frame: Frame::containing_address(unsafe { controlregs::cr3() } as usize),
+            p4_frame: Frame::containing_address(control_regs::cr3().0 as usize),
         };
 
         unsafe {
-            controlregs::cr3_write(new_table.p4_frame.start_address() as u64);
+            control_regs::cr3_write(PhysicalAddress(new_table.p4_frame.start_address() as u64));
         }
         old_table
     }

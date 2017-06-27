@@ -31,12 +31,12 @@ impl Mapper {
 
     /// Returns a reference to the level 4 page table.
     pub fn p4(&self) -> &Table<Level4> {
-        unsafe { self.p4.get() }
+        unsafe { self.p4.as_ref() }
     }
 
     /// Returns a mutable reference to the level 4 page table.
     pub fn p4_mut(&mut self) -> &mut Table<Level4> {
-        unsafe { self.p4.get_mut() }
+        unsafe { self.p4.as_mut() }
     }
 
     /// Translates a virtual to the corresponding physical
@@ -138,10 +138,9 @@ impl Mapper {
 
         // Even after we update this value in memory,
         // it is still cached in the TLB in the CPU.
-        // Use ::x86 crate to flush it.
-        unsafe {
-            ::x86::tlb::flush(page.start_address());
-        }
+        use x86_64::VirtualAddress;
+        use x86_64::instructions::tlb;
+        tlb::flush(VirtualAddress(page.start_address()));
 
         // TODO Free p(1,2,3) table if empty
         allocator.deallocate_frame(frame);

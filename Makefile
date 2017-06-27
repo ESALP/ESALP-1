@@ -9,7 +9,7 @@
 
 arch ?= x86_64
 name ?= ESALP
-target ?= $(arch)-unknown-none-gnu
+target ?= $(arch)-ESALP
 rust_os := target/$(target)/debug/lib$(name).a
 kernel := build/kernel-$(arch).bin
 iso := build/os-$(arch).iso

@@ -12,6 +12,7 @@
 use core::ptr::Unique;
 use spin::Mutex;
 use log_buffer::LogBuffer;
+use core::sync::atomic::{AtomicBool, Ordering};
 use core::sync::atomic::{ATOMIC_BOOL_INIT, ATOMIC_USIZE_INIT};
 use core::cell::UnsafeCell;
 use core::convert::AsMut;
@@ -20,6 +21,8 @@ use core::convert::AsMut;
 const BUFFER_HEIGHT: usize = 25;
 /// The number of columns in the VGA text buffer
 const BUFFER_WIDTH: usize = 80;
+
+static WAIT_FLUSH: AtomicBool = ATOMIC_BOOL_INIT;
 
 /// All writing to the VGA text buffer _must_ go through this
 /// struct.
@@ -83,12 +86,23 @@ pub fn flush_screen() {
     // TODO these operations have to be atomic together
     WRITER.lock().write_str(WRITE_BUF.extract());
     WRITE_BUF.clear();
+
+    WAIT_FLUSH.store(false, Ordering::Relaxed);
+}
+
+fn wait_flush() {
+    WAIT_FLUSH.store(true, Ordering::Relaxed);
+
+    while WAIT_FLUSH.load(Ordering::Relaxed) {
+        unsafe { asm!("pause"); }
+    }
 }
 
 /// Changes the color of the `WRITER` struct. This may produce
 /// unpredictable behaviour if `bg` has the bright bit (bit 3)
 /// set.
 pub fn change_color(fg: Color, bg: Color) {
+    wait_flush();
     WRITER.lock().color(fg, bg);
 }
 
@@ -169,7 +183,7 @@ impl Writer {
 
     /// Gets a reference to the buffer
     fn buffer(&mut self) -> &mut Buffer {
-        unsafe { self.buffer.get_mut() }
+        unsafe { self.buffer.as_mut() }
     }
 
     /// Moves the position to the next line, similar to printing

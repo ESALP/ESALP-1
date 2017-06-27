@@ -1,0 +1,12 @@
+{
+	"llvm-target": "x86_64-unknown-none",
+	"target-endian": "little",
+	"target-pointer-width": "64",
+	"linker-flavor": "gcc",
+	"os": "none",
+	"arch": "x86_64",
+	"data-layout": "e-m:e-i64:64-f80:128-n8:16:32:64-S128",
+	"features": "-mmx,-sse,-sse2,+soft-float",
+	"disable-redzone": true,
+	"panic": "abort"
+}

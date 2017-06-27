@@ -9,9 +9,10 @@
 
 #![allow(dead_code)]
 
-use core::fmt;
-
 use spin::Mutex;
+
+use x86_64::structures::idt::Idt;
+use x86_64::structures::idt::{ExceptionStackFrame, PageFaultErrorCode};
 
 use self::pic::ChainedPICs;
 pub use self::keyboard::KEYBOARD;
@@ -23,17 +24,9 @@ mod keyboard;
 mod cpuio;
 /// The programmable interrupt controller
 mod pic;
-/// The Interrupt Descriptor Table
-mod idt;
 
 extern "C" {
-    fn isr0();
-    fn isr3();
-    fn isr13();
-    fn isr14();
-    fn isr32();
-    fn isr33();
-    /// Function that contains the `sti` instruction
+    /// Enable interrupts
     fn sti();
     /// The kernel exit point
     fn KEXIT();
@@ -41,19 +34,20 @@ extern "C" {
 
 lazy_static! {
     /// This is the Interrupt Descriptor Table that contains handlers for all
-    /// interrupt vectors that we support. Each handler is set in its lazy_static
-    /// definition and is not modified again.
-    // TODO Use const functions for initial handlers
-    static ref IDT: idt::Idt = {
-        let mut idt = idt::Idt::new();
+    /// interrupt vectors that we support. Each handler is set in its initialization
+    /// and is not modified again.
+    static ref IDT: Idt = {
+        let mut idt = Idt::new();
 
         // Initialize handlers
-        idt.set_handler(0x0, isr0 );
-        idt.set_handler(0x3, isr3 );
-        idt.set_handler(0xD, isr13);
-        idt.set_handler(0xE, isr14);
-        idt.set_handler(0x20,isr32);
-        idt.set_handler(0x21,isr33);
+        idt.divide_by_zero.set_handler_fn(de_handler);
+        idt.breakpoint.set_handler_fn(breakpoint_handler);
+        idt.general_protection_fault.set_handler_fn(gp_handler);
+        idt.page_fault.set_handler_fn(pf_handler);
+        // PIC handlers
+        idt[0x20].set_handler_fn(kb_handler);
+        idt[0x21].set_handler_fn(timer_handler);
+
         idt
     };
 }
@@ -62,48 +56,13 @@ lazy_static! {
 pub static PIC: Mutex<ChainedPICs> = Mutex::new(unsafe { ChainedPICs::new(0x20, 0x28) });
 
 pub fn init() {
+    IDT.load();
     unsafe {
-        IDT.load();
         {
             let mut pic = PIC.lock();
             pic.initialize();
         }
         sti();
-    }
-}
-
-/// A struct that represents what the CPU pushes to the stack when an isr is
-/// called.
-#[repr(C)]
-pub struct ExceptionStackFrame {
-    error_code: u64,
-    instruction_pointer: u64,
-    code_segment: u64,
-    cpu_flags: u64,
-    stack_pointer: u64,
-    stack_segment: u64,
-}
-
-impl fmt::Debug for ExceptionStackFrame {
-    /// Pretty printing for the `ExceptionStackFrame` struct.
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f,
-               r#"
-ExceptionStackFrame {{
-    Instruction Pointer: 0x{:04x}:{:0al$x},
-    Stack Pointer:       0x{:04x}:{:0al$x},
-    Flags:               0b{:0fl$b},
-    Error Code:          0b{:0fl$b},
-}}"#,
-               self.code_segment,
-               self.instruction_pointer,
-               self.stack_segment,
-               self.stack_pointer,
-               self.cpu_flags,
-               self.error_code,
-               // TODO maybe adjust this dynamically?
-               al = 16,
-               fl = 16)
     }
 }
 
@@ -138,54 +97,31 @@ ExceptionStackFrame {{
 //  | FPU Error Interrupt           | 25 (0x18)  | Interrupt   | #FERR      | No            |
 //  | ----------------------------- | ---------- | ----------- | ---------- | ------------- |
 
-/// All assembly interrupt service routines call this function with their interrupt
-/// vector number.
-#[no_mangle]
-pub extern "C" fn rust_irq_handler(stack_frame: *const ExceptionStackFrame, isr_number: usize) {
-    match isr_number {
-        0x0 => rust_de_handler(stack_frame),
-        0x3 => breakpoint_handler(stack_frame),
-        0xD => rust_gp_handler(stack_frame),
-        0xE => rust_pf_handler(stack_frame),
-        0x20 => rust_timer_handler(),
-        0x21 => rust_kb_handler(),
-        _ => unreachable!(),
-    }
-}
-
 /// Divide by zero handler
-extern "C" fn rust_de_handler(stack_frame: *const ExceptionStackFrame) {
-    unsafe {
-        panic!("EXCEPTION DIVIDE BY ZERO\n{:#?}", *stack_frame);
-    }
+extern "x86-interrupt" fn de_handler(stack_frame: &mut ExceptionStackFrame) {
+    panic!("EXCEPTION DIVIDE BY ZERO\n{:#?}", stack_frame);
 }
 
-extern "C" fn breakpoint_handler(stack_frame: *const ExceptionStackFrame) {
-    unsafe {
-        println!("Breakpoint at {:#?}\n{:#?}",
-                 (*stack_frame).instruction_pointer,
-                 *stack_frame);
-    }
+extern "x86-interrupt" fn breakpoint_handler(stack_frame: &mut ExceptionStackFrame) {
+    println!("Breakpoint at {:#?}\n{:#?}",
+             (stack_frame).instruction_pointer,
+             stack_frame);
 }
 
 /// General protection fault handler
-extern "C" fn rust_gp_handler(stack_frame: *const ExceptionStackFrame) {
-    unsafe {
-        panic!("EXCEPTION GENERAL PROTECTION FAULT\n{:#?}", *stack_frame);
-    }
+extern "x86-interrupt" fn gp_handler(stack_frame: &mut ExceptionStackFrame, error_code: u64) {
+    panic!("EXCEPTION GENERAL PROTECTION FAULT\nerror_code: {}\n{:#?}\n", error_code, stack_frame);
 }
 
 /// Protection fault handler
-extern "C" fn rust_pf_handler(stack_frame: *const ExceptionStackFrame) {
-    unsafe {
-        panic!("EXCEPTION PAGE FAULT\n{:#?}", *stack_frame);
-    }
+extern "x86-interrupt" fn pf_handler(stack_frame: &mut ExceptionStackFrame, error_code: PageFaultErrorCode) {
+    panic!("EXCEPTION PAGE FAULT\nerror_code: {:?}\n{:#?}", error_code, stack_frame);
 }
 
 /// Timer handler
 ///
 /// This function flushes the log buffer whenever a timer interrupt happends
-extern "C" fn rust_timer_handler() {
+extern "x86-interrupt" fn timer_handler(_: &mut ExceptionStackFrame) {
     // Print to the screen
     vga_buffer::flush_screen();
     unsafe {
@@ -197,7 +133,7 @@ extern "C" fn rust_timer_handler() {
 ///
 /// This function pages the `Keyboard` port to get the key that was pressed, it then
 /// prints the associated byte to the screen and saves the state of the keyboard.
-extern "C" fn rust_kb_handler() {
+extern "x86-interrupt" fn kb_handler(_: &mut ExceptionStackFrame) {
     let mut kb = KEYBOARD.lock();
     match kb.port.read() {
         // If the key was just pressed,

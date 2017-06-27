@@ -17,7 +17,6 @@
 use spin::Mutex;
 use linked_list_allocator::Heap;
 
-#[macro_use]
 extern crate lazy_static;
 extern crate linked_list_allocator;
 extern crate spin;
