@@ -5,12 +5,9 @@ rust:
 
 cache: cargo
 
-install:
-    - curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain nightly
-    - source ~/.cargo/env
+before_script:
     - rustup component add rust-src
     - (cargo install xargo || true)
-    - (cargo install rustfmt || true)
 
 sudo: false
 
@@ -23,4 +20,5 @@ addons:
         packages:
             - nasm
 
-script: bash scripts/travis-build.sh
+script:
+    - make

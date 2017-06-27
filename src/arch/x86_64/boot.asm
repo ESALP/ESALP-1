@@ -233,7 +233,7 @@ section .init.text.high
 global long_mode_start
 long_mode_start:
 	; Load the new GDT
-	lgdt [GDT.ptr]
+	lgdt [rel GDT.ptr]
 
 	; Long jump to the higher half. Because `jmp` does not take
 	; a 64 bit address (which we need because we are practically
@@ -256,7 +256,7 @@ start_high:
 	; continue to identity map the first Mb
 	mov rax, low_p2_table - KERNEL_BASE
 	or rax, 11b ; present + writable
-	mov [low_p3_table], rax
+	mov [rel low_p3_table], rax
 
 	; set up the segment registers
 	mov ax, GDT.data ; data offset

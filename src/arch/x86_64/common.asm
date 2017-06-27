@@ -76,7 +76,9 @@ eputs:
 	mov [0xb8008], rax
 	;prepare to "call" puts
 	mov si, 0x04 ; Red on black
-	push KEXIT ;Makes puts ret to KEXIT
+	; Push cannot take a 64bit argument
+	mov rax, KEXIT
+	push rax ; Makes puts ret to KEXIT
 
 ; Regular puts, is called with a pointer
 ; to a string and a color byte.
