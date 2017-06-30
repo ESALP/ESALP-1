@@ -9,6 +9,8 @@
 
 #![allow(dead_code,unused_variables)]
 
+use spin::Mutex;
+
 use multiboot2::BootInformation;
 
 pub use self::area_frame_iter::AreaFrameIter;
@@ -33,6 +35,11 @@ pub const PAGE_SIZE: usize = 4096;
 const HEAP_START: usize = 0o000_001_000_0000;
 /// The size of the kernel heap
 const HEAP_SIZE: usize = 100 * 1024;
+
+/// A static `StackFrameAllocator`. Will always be Some(StackFrameAlloator)
+/// after init runs. This cannot be used while `ACTIVE_TABLE` is being used,
+/// or it will lock the thread.
+pub static FRAME_ALLOCATOR: Mutex<Option<StackFrameAllocator>> = Mutex::new(None);
 
 /// Initializes memory to a defined state.
 ///
@@ -68,19 +75,15 @@ pub fn init(boot_info: &BootInformation) {
              boot_info.start_address() - KERNEL_BASE,
              boot_info.end_address() - KERNEL_BASE);
 
-    let mut frame_allocator =
-        unsafe {
-            StackFrameAllocator::new(AreaFrameIter::new(kernel_start as usize,
-                                                        kernel_end as usize,
-                                                        boot_info.start_address() - KERNEL_BASE,
-                                                        boot_info.end_address() - KERNEL_BASE,
-                                                        memory_map_tag.memory_areas()))
-        };
+    unsafe { *FRAME_ALLOCATOR.lock() = Some(
+        StackFrameAllocator::new(AreaFrameIter::new(kernel_start as usize,
+                                                    kernel_end as usize,
+                                                    boot_info.start_address() - KERNEL_BASE,
+                                                    boot_info.end_address() - KERNEL_BASE,
+                                                    memory_map_tag.memory_areas()))
+    )}
 
-    // TODO FIXME replace with static active table
-    let mut temp_active_table = unsafe {paging::ActivePageTable::new()};
-
-    paging::remap_the_kernel(&mut temp_active_table, &mut frame_allocator, boot_info);
+    paging::remap_the_kernel(boot_info);
 
     use self::paging::Page;
     use hole_list_allocator;
@@ -89,7 +92,7 @@ pub fn init(boot_info: &BootInformation) {
     let heap_end_page = Page::containing_address(HEAP_START + HEAP_SIZE - 1);
 
     for page in Page::range_inclusive(heap_start_page, heap_end_page) {
-        temp_active_table.map(page, paging::WRITABLE, &mut frame_allocator);
+        page.map(paging::WRITABLE);
     }
 
     unsafe {

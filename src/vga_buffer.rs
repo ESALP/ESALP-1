@@ -11,49 +11,19 @@
 
 use core::ptr::Unique;
 use spin::Mutex;
-use log_buffer::LogBuffer;
-use core::sync::atomic::{AtomicBool, Ordering};
-use core::sync::atomic::{ATOMIC_BOOL_INIT, ATOMIC_USIZE_INIT};
-use core::cell::UnsafeCell;
-use core::convert::AsMut;
 
 /// The number of rows in the VGA text buffer
 const BUFFER_HEIGHT: usize = 25;
 /// The number of columns in the VGA text buffer
 const BUFFER_WIDTH: usize = 80;
 
-static WAIT_FLUSH: AtomicBool = ATOMIC_BOOL_INIT;
-
 /// All writing to the VGA text buffer _must_ go through this
 /// struct.
-static WRITER: Mutex<Writer> = Mutex::new(Writer {
+pub static WRITER: Mutex<Writer> = Mutex::new(Writer {
     column_position: 0,
     color_code: ColorCode::new(Color::Pink, Color::Black),
     buffer: unsafe { Unique::new(0xb8000 as *mut _) },
 });
-
-/// This struct is a hack that allows AsMut to be used for a
-/// 4096 unit array. Only arrays up to size 32 impliment it
-/// by default.
-pub struct BufWrapper<T>([T; 4096]);
-
-impl<T> AsMut<[T]> for BufWrapper<T> {
-    fn as_mut(&mut self) -> &mut [T] {
-        self.0.as_mut()
-    }
-}
-
-/// This log buffer is the public interface to the text buffer. The
-/// only public method that should be used is `write()` which is used
-/// in `print!()` and `println!()`. It is periodically flushed to the
-/// WRITER where it is printed to the text buffer. It is Sync, does
-/// not block, and is entirely thread safe. However, no writes can
-/// happen on the same time as a flush.
-pub static WRITE_BUF: LogBuffer<BufWrapper<u8>> = LogBuffer {
-    buffer: UnsafeCell::new(BufWrapper::<u8>([0xff; 4096])),
-    position: ATOMIC_USIZE_INIT,
-    lock: ATOMIC_BOOL_INIT,
-};
 
 macro_rules! println {
     ($fmt:expr) => (print!(concat!($fmt, "\n")));
@@ -63,8 +33,9 @@ macro_rules! println {
 macro_rules! print {
     ($($arg:tt)*) => ({
         use core::fmt::Write;
-        let mut wb = &($crate::vga_buffer::WRITE_BUF);
-        wb.write_fmt(format_args!($($arg)*)).unwrap();
+        if let Some(mut writer) = $crate::vga_buffer::WRITER.try_lock() {
+            writer.write_fmt(format_args!($($arg)*)).unwrap();
+        }
     });
 }
 
@@ -77,32 +48,10 @@ pub fn clear_screen() {
     }
 }
 
-/// Flushes `WRITE_BUF` to the screen, this locks `WRITE_BUF`
-pub fn flush_screen() {
-    if WRITER.try_lock().is_none() {
-        // Screen is <probably> already being flushed so just bail out.
-        return;
-    }
-    // TODO these operations have to be atomic together
-    WRITER.lock().write_str(WRITE_BUF.extract());
-    WRITE_BUF.clear();
-
-    WAIT_FLUSH.store(false, Ordering::Relaxed);
-}
-
-fn wait_flush() {
-    WAIT_FLUSH.store(true, Ordering::Relaxed);
-
-    while WAIT_FLUSH.load(Ordering::Relaxed) {
-        unsafe { asm!("pause"); }
-    }
-}
-
 /// Changes the color of the `WRITER` struct. This may produce
 /// unpredictable behaviour if `bg` has the bright bit (bit 3)
 /// set.
 pub fn change_color(fg: Color, bg: Color) {
-    wait_flush();
     WRITER.lock().color(fg, bg);
 }
 
@@ -131,7 +80,7 @@ pub enum Color {
 }
 
 /// A struct that abstracts writing to the VGA text buffer.
-struct Writer {
+pub struct Writer {
     column_position: usize,
     color_code: ColorCode,
     buffer: Unique<Buffer>,

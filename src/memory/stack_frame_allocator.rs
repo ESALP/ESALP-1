@@ -26,8 +26,11 @@ pub struct StackFrameAllocator {
     frame_iter: AreaFrameIter,
     /// A small allocator that can be used for holding excess frames that are needed
     /// for mapping the page table.
-    temp_alloc: TinyAllocator,
+    temp_alloc: TinyAllocator<[Option<Frame>; 3]>,
 }
+
+// AreaFrameIter is not Send because it contains a raw pointer
+unsafe impl Send for StackFrameAllocator {}
 
 impl StackFrameAllocator {
     /// Returns a new `StackFrameAllocator`.
@@ -43,7 +46,7 @@ impl StackFrameAllocator {
             stack_base: Unique::new(0o177777_777_777_000_000_0000 as *mut Frame),
             offset: 0,
             frame_iter: area_frame_iter,
-            temp_alloc: TinyAllocator::empty(),
+            temp_alloc: TinyAllocator::new([None, None, None]),
         }
     }
 }

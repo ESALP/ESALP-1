@@ -351,5 +351,5 @@ kernel_table:
 ; undefined behavior.
 align 16
 stack_bottom:
-	resb 4096 * 6
+	resb 4096 * 15
 stack_top:

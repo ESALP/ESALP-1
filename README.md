@@ -15,7 +15,6 @@ Right now it doesn't do much, but more is added every day!
 
 Current features:
 + Can print to the VGA text buffer (in 255 different colors!)
- + Using a non-blocking log buffer
 + Simple PS/2 keyboard driver
  + with multiple keyboard maps
 + Simple paging

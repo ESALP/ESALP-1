@@ -12,11 +12,12 @@ use super::table::{Table, Level1};
 use memory::{Frame, FrameAllocator};
 
 /// A page to temporarily map a frame.
+#[must_use = "The TemporaryPage must be consumed at the end of its lifetime"]
 pub struct TemporaryPage {
     /// The page itself.
     page: Page,
     /// A temporary allocator.
-    allocator: TinyAllocator,
+    pub allocator: TinyAllocator<[Option<Frame>; 3]>,
 }
 
 impl TemporaryPage {
@@ -26,7 +27,11 @@ impl TemporaryPage {
     {
         TemporaryPage {
             page: page,
-            allocator: TinyAllocator::new(|| allocator.allocate_frame()),
+            allocator: {
+                let mut alloc = TinyAllocator::new([None, None, None]);
+                alloc.fill(|| allocator.allocate_frame());
+                alloc
+            }
         }
     }
 
@@ -57,40 +62,37 @@ impl TemporaryPage {
         unsafe { &mut *(self.map(frame, active_table) as *mut Table<Level1>) }
     }
 
-    /// This is a hack that drops the `TemporaryPage` without leaking frames. The
+    /// This method consumes the `TemporaryPage` without leaking frames. The
     /// drop trait cannot be used because this function needs a `FrameAllocator`
-    pub fn drop<A>(mut self, allocator: &mut A)
+    pub fn consume<A>(mut self, allocator: &mut A)
         where A: FrameAllocator
     {
-        self.allocator.drop(allocator);
+        allocator.transfer_frames(&mut self.allocator);
     }
 }
 
 /// A `FrameAllocator` that can allocate up to three frames: enough for a p3, p2 and
 /// p1 table.
-pub struct TinyAllocator([Option<Frame>; 3]);
+#[must_use = "The TinyAllocator must be consumed at the end of its lifetime"]
+pub struct TinyAllocator<T: AsMut<[Option<Frame>]>>(T);
 
-impl TinyAllocator {
-    /// Constructs a new TinyAllocator using the given closure.
-    pub fn new<F>(mut f: F) -> TinyAllocator
-        where F: FnMut() -> Option<Frame>
-    {
-        TinyAllocator([f(), f(), f()])
-    }
 
-    /// Constructs an empty TinyAllocator.
-    pub const fn empty() -> TinyAllocator {
-        TinyAllocator([None, None, None])
+impl<T> TinyAllocator<T>
+    where T: AsMut<[Option<Frame>]> + AsRef<[Option<Frame>]>
+{
+    /// Constructs a new TinyAllocator
+    pub const fn new(buf: T) -> TinyAllocator<T> {
+        TinyAllocator(buf)
     }
 
     /// Replaces all `None` fields of the allocator with new `Frames` from the given
     /// closure.
-    pub fn refill<F>(&mut self, mut f: F)
-        where F: FnMut() -> Frame
+    pub fn fill<F>(&mut self, mut f: F)
+        where F: FnMut() -> Option<Frame>
     {
-        for frame_option in &mut self.0 {
+        for frame_option in self.0.as_mut().iter_mut() {
             if frame_option.is_none() {
-                *frame_option = Some(f());
+                *frame_option = f();
             }
         }
     }
@@ -99,7 +101,7 @@ impl TinyAllocator {
     pub fn flush<F>(&mut self, mut f: F)
         where F: FnMut(Frame)
     {
-        for frame_option in &mut self.0 {
+        for frame_option in self.0.as_mut().iter_mut() {
             if let Some(ref frame) = *frame_option {
                 // Cloning is safe in this context because the original is
                 // immediatly destroyed after the clone.
@@ -111,7 +113,7 @@ impl TinyAllocator {
 
     /// Returns `true` if the allocator is full.
     pub fn is_full(&self) -> bool {
-        for frame_option in &self.0 {
+        for frame_option in self.0.as_ref().iter() {
             if frame_option.is_none() {
                 return false;
             }
@@ -121,23 +123,28 @@ impl TinyAllocator {
 
     /// Returns `true` if the allocator is empty.
     pub fn is_empty(&self) -> bool {
-        self.0 == [None, None, None]
+        for frame_option in self.0.as_ref().iter() {
+            if !frame_option.is_none() {
+                return false;
+            }
+        }
+        true
     }
 
-    /// This is a hack that drops the `TinyAllocator` without leaking frames. The
+    /// This function consumes the `TinyAllocator` without leaking frames. The
     /// drop trait cannot be used because this function needs a `FrameAllocator`
-    pub fn drop<A>(&mut self, allocator: &mut A)
+    pub fn consume<A>(mut self, allocator: &mut A)
         where A: FrameAllocator
     {
-        allocator.transfer_frames(self);
+        allocator.transfer_frames(&mut self);
     }
 }
 
-impl FrameAllocator for TinyAllocator {
+impl<T: AsMut<[Option<Frame>]>> FrameAllocator for TinyAllocator<T> {
     /// Allocates any one of the three frames to the caller. If all three are used
     /// it returns `None`.
     fn allocate_frame(&mut self) -> Option<Frame> {
-        for frame_option in &mut self.0 {
+        for frame_option in self.0.as_mut().iter_mut() {
             if frame_option.is_some() {
                 return frame_option.take();
             }
@@ -151,12 +158,12 @@ impl FrameAllocator for TinyAllocator {
     /// This function panics if it is called when all frames are already full. It
     /// cannot be used to hold more than three frames.
     fn deallocate_frame(&mut self, frame: Frame) {
-        for frame_option in &mut self.0 {
+        for frame_option in self.0.as_mut().iter_mut() {
             if frame_option.is_none() {
                 *frame_option = Some(frame);
                 return;
             }
         }
-        panic!("Tiny allocator can only hold 3 frames.");
+        panic!("Tiny allocator can only hold {} frames.", self.0.as_mut().len());
     }
 }

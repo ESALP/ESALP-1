@@ -16,6 +16,7 @@ pub use self::entry::*;
 pub use self::mapper::Mapper;
 pub use self::temporary_page::{TemporaryPage, TinyAllocator};
 use memory::{PAGE_SIZE, Frame, FrameAllocator};
+use memory::FRAME_ALLOCATOR;
 
 /// An entry in the page table.
 mod entry;
@@ -107,9 +108,49 @@ impl Page {
             end: end,
         }
     }
+
+    /// Map this `Page` to the given `Frame`
+    pub fn map_to(self, frame: Frame, flags: EntryFlags) {
+        let mut temp_alloc = TinyAllocator::new([None, None, None]);
+        temp_alloc.fill(||
+            FRAME_ALLOCATOR.lock().as_mut().unwrap().allocate_frame());
+
+        ACTIVE_TABLE.lock().map_to(self, frame, flags, &mut temp_alloc);
+
+        temp_alloc.consume(FRAME_ALLOCATOR.lock().as_mut().unwrap());
+    }
+
+    /// Map this `Page` to any availible `Frame`.
+    ///
+    /// # Panics
+    /// Panics if OOM
+    pub fn map(self, flags: EntryFlags) {
+            let frame = FRAME_ALLOCATOR
+                .lock()
+                .as_mut()
+                .unwrap()
+                .allocate_frame()
+                .expect("Out of Memory :(");
+            self.map_to(frame, flags)
+    }
+
+    /// Unmap this `Page`
+    pub fn unmap(self) {
+        let mut temp_alloc = TinyAllocator::new([None, None, None]);
+
+        ACTIVE_TABLE.lock().unmap(self, &mut temp_alloc);
+
+        temp_alloc.consume(FRAME_ALLOCATOR.lock().as_mut().unwrap());
+    }
 }
 
-/// An iterator acrossed `Page`s
+/// Identity map the given `Frame`
+fn identity_map(frame: Frame, flags: EntryFlags) {
+        let page = Page::containing_address(frame.start_address());
+        page.map_to(frame, flags);
+}
+
+/// An iterator across `Page`s
 pub struct PageIter {
     start: Page,
     end: Page,
@@ -158,8 +199,8 @@ impl ActivePageTable {
         ActivePageTable { mapper: Mapper::new() }
     }
 
-    /// Temporarly change the recursive mapping to the given table
-    /// and executes the given closure in the new context.
+    /// Temporarily change the recursive mapping to the given table
+    /// and execute the given closure in the new context.
     /// By return the table's state is restored.
     pub fn with<F>(&mut self,
                    table: &mut InactivePageTable,
@@ -190,6 +231,7 @@ impl ActivePageTable {
         }
 
         temporary_page.unmap(self);
+        temporary_page.allocator.flush(|_| {});
     }
 
     /// Activates the `InactivePageTable` given.
@@ -225,12 +267,16 @@ impl InactivePageTable {
                -> InactivePageTable {
         {
             let table = temporary_page.map_table_frame(frame.clone(), active_table);
+            // Now that it's mapped we can zero it
             table.zero();
             // Now set up recursive mapping for the table
             table[510].set(frame.clone(), PRESENT | WRITABLE);
         }
 
         temporary_page.unmap(active_table);
+        // At this point, the p4 table still remains in the allocator, flush it
+        // to make sure that the `InactivePageTable` is the only owner
+        temporary_page.allocator.flush(|_| {});
 
         InactivePageTable { p4_frame: frame }
     }
@@ -241,22 +287,55 @@ impl InactivePageTable {
 /// Each kernel section is mapped to the higher half with the correct permissions.
 /// This function also identity maps the VGA text buffer and maps the multiboot2
 /// information structure to the higher half.
-pub fn remap_the_kernel<A>(active_table: &mut ActivePageTable,
-                           allocator: &mut A,
-                           boot_info: &BootInformation)
-    where A: FrameAllocator
-{
+pub fn remap_the_kernel(boot_info: &BootInformation) {
     use memory::KERNEL_BASE;
 
-    // Create temporary page at arbritrary unused page address
-    let mut temporary_page = TemporaryPage::new(Page(0xdeadbeef), allocator);
+    // Create new inactive table using a temporary page
+    let mut temporary_page = TemporaryPage::new(
+        Page(0xdeadbeef),
+        FRAME_ALLOCATOR.lock().as_mut().unwrap());
     let mut new_table = {
-        let frame = allocator.allocate_frame()
+        let frame = FRAME_ALLOCATOR.lock()
+            .as_mut()
+            .unwrap()
+            .allocate_frame()
             .expect("No more frames");
-        InactivePageTable::new(frame, active_table, &mut temporary_page)
+        InactivePageTable::new(frame, &mut ACTIVE_TABLE.lock(), &mut temporary_page)
     };
 
-    active_table.with(&mut new_table, &mut temporary_page, |mapper| {
+    // FRAME_ALLOCATOR can't be used while page tables are swapped, instead use
+    // a large TinyAllocator
+    //
+    // Rust isn't good with generics on large arrays, so we have to use a wrapper
+    use core::convert::{AsMut, AsRef};
+    struct BufWrapper<T>([T; 64]);
+    impl<T> AsMut<[T]> for BufWrapper<T> {
+        fn as_mut(&mut self) -> &mut [T] {
+            self.0.as_mut()
+        }
+    }
+    impl<T> AsRef<[T]> for BufWrapper<T> {
+        fn as_ref(&self) -> &[T] {
+            self.0.as_ref()
+        }
+    }
+    let mut allocator: TinyAllocator<BufWrapper<Option<Frame>>> =
+        unsafe {
+            TinyAllocator::new({
+                let mut buf: BufWrapper<Option<Frame>> = BufWrapper(
+                    ::core::intrinsics::uninit::<[Option<Frame>; 64]>());
+                for (i, frame_opt) in buf.as_mut().iter_mut().enumerate() {
+                    *frame_opt = FRAME_ALLOCATOR
+                        .lock()
+                        .as_mut()
+                        .unwrap()
+                        .allocate_frame();
+                }
+                buf
+            })
+        };
+
+    ACTIVE_TABLE.lock().with(&mut new_table, &mut temporary_page, |mapper| {
 
         let elf_sections_tag = boot_info.elf_sections_tag()
             .expect("Memory map tag required");
@@ -286,13 +365,13 @@ pub fn remap_the_kernel<A>(active_table: &mut ActivePageTable,
 
             for frame in Frame::range_inclusive(start_frame, end_frame) {
                 let new_page = Page::containing_address(frame.start_address() + KERNEL_BASE);
-                mapper.map_to(new_page, frame, flags, allocator);
+                mapper.map_to(new_page, frame, flags, &mut allocator);
             }
         }
 
         // Identity map the VGA buffer
         let vga_buffer = Frame::containing_address(0xb8000);
-        mapper.identity_map(vga_buffer, WRITABLE, allocator);
+        mapper.identity_map(vga_buffer, WRITABLE, &mut allocator);
 
         // Map the multiboot info structure to the higher half
         let multiboot_start = Frame::containing_address(boot_info.start_address() - KERNEL_BASE);
@@ -300,33 +379,20 @@ pub fn remap_the_kernel<A>(active_table: &mut ActivePageTable,
 
         for frame in Frame::range_inclusive(multiboot_start, multiboot_end) {
             let new_page = Page::containing_address(frame.start_address() + KERNEL_BASE);
-            mapper.map_to(new_page, frame, PRESENT, allocator);
+            mapper.map_to(new_page, frame, PRESENT, &mut allocator);
         }
     });
-    temporary_page.drop(allocator);
-
-    let old_table = active_table.switch(new_table);
+    let old_table = ACTIVE_TABLE.lock().switch(new_table);
     println!("New page table loaded");
+
+    temporary_page.consume(&mut allocator);
+    allocator.consume(FRAME_ALLOCATOR.lock().as_mut().unwrap());
 
     // Use the previous table as a guard page for the kernel stack
     let old_p4_page = Page::containing_address(old_table.p4_frame.start_address() + KERNEL_BASE);
-    active_table.unmap(old_p4_page, allocator);
+    old_p4_page.unmap();
 
     println!("New guard page at {:#x}", old_p4_page.start_address());
-}
-
-//TODO Replace allocator field with static allocator for public interface.
-pub fn map_to<A>(page: Page,
-                 frame: Frame,
-                 flags: EntryFlags,
-                 allocator: &mut A)
-    where A: FrameAllocator
-{
-    let mut temp_alloc = TinyAllocator::new(|| allocator.allocate_frame());
-
-    ACTIVE_TABLE.lock().map_to(page, frame, flags, &mut temp_alloc);
-
-    temp_alloc.drop(allocator);
 }
 
 //pub fn test_paging<A>(page_table: &mut ActivePageTable, allocator: &mut A)

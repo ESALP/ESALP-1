@@ -15,6 +15,7 @@
 #![feature(associated_type_defaults)]
 #![feature(asm)]
 #![feature(abi_x86_interrupt)]
+#![feature(core_intrinsics)]
 #![no_std]
 
 // crates.io crates
@@ -32,10 +33,6 @@ extern crate lazy_static;
 /// A macro for running a function only once
 #[macro_use]
 extern crate once;
-
-// Features without allocation
-/// Thread safe log buffer
-extern crate log_buffer;
 
 // Features involving allocation
 /// Heap allocator for rust code

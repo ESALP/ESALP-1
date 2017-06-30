@@ -16,7 +16,6 @@ use x86_64::structures::idt::{ExceptionStackFrame, PageFaultErrorCode};
 
 use self::pic::ChainedPICs;
 pub use self::keyboard::KEYBOARD;
-use vga_buffer;
 
 /// Abstraction of the PS/2 keyboard
 mod keyboard;
@@ -28,8 +27,6 @@ mod pic;
 extern "C" {
     /// Enable interrupts
     fn sti();
-    /// The kernel exit point
-    fn KEXIT();
 }
 
 lazy_static! {
@@ -45,8 +42,8 @@ lazy_static! {
         idt.general_protection_fault.set_handler_fn(gp_handler);
         idt.page_fault.set_handler_fn(pf_handler);
         // PIC handlers
-        idt[0x20].set_handler_fn(kb_handler);
-        idt[0x21].set_handler_fn(timer_handler);
+        idt[0x20].set_handler_fn(timer_handler);
+        idt[0x21].set_handler_fn(kb_handler);
 
         idt
     };
@@ -122,8 +119,6 @@ extern "x86-interrupt" fn pf_handler(stack_frame: &mut ExceptionStackFrame, erro
 ///
 /// This function flushes the log buffer whenever a timer interrupt happends
 extern "x86-interrupt" fn timer_handler(_: &mut ExceptionStackFrame) {
-    // Print to the screen
-    vga_buffer::flush_screen();
     unsafe {
         PIC.lock().master.end_of_interrupt();
     }
