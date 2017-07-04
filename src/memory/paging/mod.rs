@@ -15,8 +15,10 @@ use spin::Mutex;
 pub use self::entry::*;
 pub use self::mapper::Mapper;
 pub use self::temporary_page::{TemporaryPage, TinyAllocator};
-use memory::{PAGE_SIZE, Frame, FrameAllocator};
-use memory::FRAME_ALLOCATOR;
+use memory::{PAGE_SIZE, Frame, FrameAllocate};
+use memory::{MemoryController, MEMORY_CONTROLLER};
+
+use memory::frame_bitmap::FrameBitmap;
 
 /// An entry in the page table.
 mod entry;
@@ -111,13 +113,12 @@ impl Page {
 
     /// Map this `Page` to the given `Frame`
     pub fn map_to(self, frame: Frame, flags: EntryFlags) {
-        let mut temp_alloc = TinyAllocator::new([None, None, None]);
-        temp_alloc.fill(||
-            FRAME_ALLOCATOR.lock().as_mut().unwrap().allocate_frame());
-
-        ACTIVE_TABLE.lock().map_to(self, frame, flags, &mut temp_alloc);
-
-        temp_alloc.consume(FRAME_ALLOCATOR.lock().as_mut().unwrap());
+        let mut lock = MEMORY_CONTROLLER.lock();
+        let &mut MemoryController {
+            ref mut active_table,
+            ref mut frame_allocator,
+        } = lock.as_mut().unwrap();
+        active_table.map_to(self, frame, flags, frame_allocator);
     }
 
     /// Map this `Page` to any availible `Frame`.
@@ -125,22 +126,24 @@ impl Page {
     /// # Panics
     /// Panics if OOM
     pub fn map(self, flags: EntryFlags) {
-            let frame = FRAME_ALLOCATOR
-                .lock()
-                .as_mut()
-                .unwrap()
-                .allocate_frame()
-                .expect("Out of Memory :(");
-            self.map_to(frame, flags)
+        let mut lock = MEMORY_CONTROLLER.lock();
+        let &mut MemoryController {
+            ref mut active_table,
+            ref mut frame_allocator,
+        } = lock.as_mut().unwrap();
+        active_table.map(self, flags, frame_allocator);
+
     }
 
     /// Unmap this `Page`
     pub fn unmap(self) {
-        let mut temp_alloc = TinyAllocator::new([None, None, None]);
+        let mut lock = MEMORY_CONTROLLER.lock();
+        let &mut MemoryController {
+            ref mut active_table,
+            ref mut frame_allocator,
+        } = lock.as_mut().unwrap();
 
-        ACTIVE_TABLE.lock().unmap(self, &mut temp_alloc);
-
-        temp_alloc.consume(FRAME_ALLOCATOR.lock().as_mut().unwrap());
+        active_table.unmap(self, frame_allocator);
     }
 }
 
@@ -287,55 +290,23 @@ impl InactivePageTable {
 /// Each kernel section is mapped to the higher half with the correct permissions.
 /// This function also identity maps the VGA text buffer and maps the multiboot2
 /// information structure to the higher half.
-pub fn remap_the_kernel(boot_info: &BootInformation) {
+pub fn remap_the_kernel<FA>(active_table: &mut ActivePageTable,
+                            mut allocator: FA,
+                            boot_info: &BootInformation) -> FrameBitmap
+    where FA: FrameAllocate
+{
     use memory::KERNEL_BASE;
 
     // Create new inactive table using a temporary page
-    let mut temporary_page = TemporaryPage::new(
-        Page(0xdeadbeef),
-        FRAME_ALLOCATOR.lock().as_mut().unwrap());
+    let mut temporary_page = 
+        TemporaryPage::new(Page(0xdeadbeef), &mut allocator);
     let mut new_table = {
-        let frame = FRAME_ALLOCATOR.lock()
-            .as_mut()
-            .unwrap()
-            .allocate_frame()
+        let frame = allocator.allocate_frame()
             .expect("No more frames");
         InactivePageTable::new(frame, &mut ACTIVE_TABLE.lock(), &mut temporary_page)
     };
 
-    // FRAME_ALLOCATOR can't be used while page tables are swapped, instead use
-    // a large TinyAllocator
-    //
-    // Rust isn't good with generics on large arrays, so we have to use a wrapper
-    use core::convert::{AsMut, AsRef};
-    struct BufWrapper<T>([T; 64]);
-    impl<T> AsMut<[T]> for BufWrapper<T> {
-        fn as_mut(&mut self) -> &mut [T] {
-            self.0.as_mut()
-        }
-    }
-    impl<T> AsRef<[T]> for BufWrapper<T> {
-        fn as_ref(&self) -> &[T] {
-            self.0.as_ref()
-        }
-    }
-    let mut allocator: TinyAllocator<BufWrapper<Option<Frame>>> =
-        unsafe {
-            TinyAllocator::new({
-                let mut buf: BufWrapper<Option<Frame>> = BufWrapper(
-                    ::core::intrinsics::uninit::<[Option<Frame>; 64]>());
-                for (i, frame_opt) in buf.as_mut().iter_mut().enumerate() {
-                    *frame_opt = FRAME_ALLOCATOR
-                        .lock()
-                        .as_mut()
-                        .unwrap()
-                        .allocate_frame();
-                }
-                buf
-            })
-        };
-
-    ACTIVE_TABLE.lock().with(&mut new_table, &mut temporary_page, |mapper| {
+    active_table.with(&mut new_table, &mut temporary_page, |mapper| {
 
         let elf_sections_tag = boot_info.elf_sections_tag()
             .expect("Memory map tag required");
@@ -382,17 +353,22 @@ pub fn remap_the_kernel(boot_info: &BootInformation) {
             mapper.map_to(new_page, frame, PRESENT, &mut allocator);
         }
     });
-    let old_table = ACTIVE_TABLE.lock().switch(new_table);
+    let old_table = active_table.switch(new_table);
     println!("New page table loaded");
 
-    temporary_page.consume(&mut allocator);
-    allocator.consume(FRAME_ALLOCATOR.lock().as_mut().unwrap());
+    // Now, we're done allocating and need a struct with FrameDeallocate. Init
+    // the FrameBitmap
+    let mut frame_bitmap = FrameBitmap::new(allocator, active_table);
+
+    temporary_page.consume(&mut frame_bitmap);
 
     // Use the previous table as a guard page for the kernel stack
     let old_p4_page = Page::containing_address(old_table.p4_frame.start_address() + KERNEL_BASE);
-    old_p4_page.unmap();
+    active_table.unmap(old_p4_page, &mut frame_bitmap);
 
     println!("New guard page at {:#x}", old_p4_page.start_address());
+
+    frame_bitmap
 }
 
 //pub fn test_paging<A>(page_table: &mut ActivePageTable, allocator: &mut A)

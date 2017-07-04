@@ -15,7 +15,6 @@
 #![feature(associated_type_defaults)]
 #![feature(asm)]
 #![feature(abi_x86_interrupt)]
-#![feature(core_intrinsics)]
 #![no_std]
 
 // crates.io crates

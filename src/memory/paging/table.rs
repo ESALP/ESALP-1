@@ -17,7 +17,7 @@
 use memory::paging::entry::*;
 use memory::paging::ENTRY_COUNT;
 use memory::paging::VirtualAddress;
-use memory::FrameAllocator;
+use memory::FrameAllocate;
 
 use core::marker::PhantomData;
 use core::ops::{Index, IndexMut};
@@ -79,7 +79,7 @@ impl<L> Table<L>
                                 index: usize,
                                 allocator: &mut A)
                                 -> &mut Table<L::NextLevel>
-        where A: FrameAllocator
+        where A: FrameAllocate
     {
         if self.next_table(index).is_none() {
             assert!(!self.entries[index].flags().contains(HUGE_PAGE),

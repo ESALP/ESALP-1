@@ -9,7 +9,7 @@
 
 use super::{Page, ActivePageTable, VirtualAddress};
 use super::table::{Table, Level1};
-use memory::{Frame, FrameAllocator};
+use memory::{Frame, FrameAllocate, FrameDeallocate};
 
 /// A page to temporarily map a frame.
 #[must_use = "The TemporaryPage must be consumed at the end of its lifetime"]
@@ -23,7 +23,7 @@ pub struct TemporaryPage {
 impl TemporaryPage {
     /// Initializes a `TinyAllocator` and returns the new `TemporaryPage`
     pub fn new<A>(page: Page, allocator: &mut A) -> TemporaryPage
-        where A: FrameAllocator
+        where A: FrameAllocate
     {
         TemporaryPage {
             page: page,
@@ -64,10 +64,10 @@ impl TemporaryPage {
 
     /// This method consumes the `TemporaryPage` without leaking frames. The
     /// drop trait cannot be used because this function needs a `FrameAllocator`
-    pub fn consume<A>(mut self, allocator: &mut A)
-        where A: FrameAllocator
+    pub fn consume<D>(self, other: &mut D)
+        where D: FrameDeallocate
     {
-        allocator.transfer_frames(&mut self.allocator);
+        self.allocator.consume(other)
     }
 }
 
@@ -75,7 +75,6 @@ impl TemporaryPage {
 /// p1 table.
 #[must_use = "The TinyAllocator must be consumed at the end of its lifetime"]
 pub struct TinyAllocator<T: AsMut<[Option<Frame>]>>(T);
-
 
 impl<T> TinyAllocator<T>
     where T: AsMut<[Option<Frame>]> + AsRef<[Option<Frame>]>
@@ -133,14 +132,16 @@ impl<T> TinyAllocator<T>
 
     /// This function consumes the `TinyAllocator` without leaking frames. The
     /// drop trait cannot be used because this function needs a `FrameAllocator`
-    pub fn consume<A>(mut self, allocator: &mut A)
-        where A: FrameAllocator
+    pub fn consume<D>(mut self, other: &mut D)
+        where D: FrameDeallocate
     {
-        allocator.transfer_frames(&mut self);
+        while let Some(frame) = self.allocate_frame() {
+            other.deallocate_frame(frame);
+        }
     }
 }
 
-impl<T: AsMut<[Option<Frame>]>> FrameAllocator for TinyAllocator<T> {
+impl<T: AsMut<[Option<Frame>]>> FrameAllocate for TinyAllocator<T> {
     /// Allocates any one of the three frames to the caller. If all three are used
     /// it returns `None`.
     fn allocate_frame(&mut self) -> Option<Frame> {
@@ -151,7 +152,8 @@ impl<T: AsMut<[Option<Frame>]>> FrameAllocator for TinyAllocator<T> {
         }
         None
     }
-
+}
+impl<T: AsMut<[Option<Frame>]>> FrameDeallocate for TinyAllocator<T> {
     /// Saves the frame to any unused space in the allocator.
     ///
     /// # Panics

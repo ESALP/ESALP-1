@@ -7,11 +7,11 @@
 // This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use memory::Frame;
+use memory::{Frame, FrameAllocate};
 use multiboot2::{MemoryAreaIter, MemoryArea};
 
 /// An iterator acrossed physical frames using memory areas.
-pub struct AreaFrameIter {
+pub struct AreaFrameAllocator {
     next_free_frame: Frame,
     current_area: Option<&'static MemoryArea>,
     areas: MemoryAreaIter,
@@ -21,15 +21,15 @@ pub struct AreaFrameIter {
     multiboot_end: Frame,
 }
 
-impl AreaFrameIter {
-    /// Returns a new `AreaFrameIter`
+impl AreaFrameAllocator {
+    /// Returns a new `AreaFrameAllocator`
     pub fn new(kernel_start: usize,
                kernel_end: usize,
                multiboot_start: usize,
                multiboot_end: usize,
                memory_areas: MemoryAreaIter)
-               -> AreaFrameIter {
-        let mut iter = AreaFrameIter {
+               -> AreaFrameAllocator {
+        let mut alloc = AreaFrameAllocator {
             next_free_frame: Frame::containing_address(0),
             current_area: None,
             areas: memory_areas,
@@ -38,8 +38,8 @@ impl AreaFrameIter {
             multiboot_start: Frame::containing_address(multiboot_start),
             multiboot_end: Frame::containing_address(multiboot_end),
         };
-        iter.choose_next_area();
-        iter
+        alloc.choose_next_area();
+        alloc
     }
 
     /// Looks for free `Frame`s in the next memory area
@@ -60,10 +60,10 @@ impl AreaFrameIter {
         }
     }
 }
-impl Iterator for AreaFrameIter {
     type Item = Frame;
 
-    fn next(&mut self) -> Option<Frame> {
+impl FrameAllocate for AreaFrameAllocator {
+    fn allocate_frame(&mut self) -> Option<Frame> {
         if let Some(area) = self.current_area {
             // "Clone the area to return it if it's free. Frame doesn't
             // implement Clone, but we can construct an identical frame
@@ -90,7 +90,7 @@ impl Iterator for AreaFrameIter {
                 return Some(frame);
             }
             // 'frame' was not valid, try again with the new 'next_free_frame'
-            self.next()
+            self.allocate_frame()
         } else {
             None // no free frames
         }

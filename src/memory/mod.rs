@@ -13,15 +13,15 @@ use spin::Mutex;
 
 use multiboot2::BootInformation;
 
-pub use self::area_frame_iter::AreaFrameIter;
-use self::stack_frame_allocator::StackFrameAllocator;
+pub use self::area_frame_allocator::AreaFrameAllocator;
+use self::frame_bitmap::FrameBitmap;
 use self::paging::PhysicalAddress;
+use self::paging::ActivePageTable;
 
-
-/// Iterator acrossed physical frames.
-mod area_frame_iter;
-/// Physical frame allocator that uses a stack.
-mod stack_frame_allocator;
+/// Allocator for physical frames.
+mod area_frame_allocator;
+/// Physical frame allocator that uses a bitmap.
+mod frame_bitmap;
 /// Virtual paging module.
 mod paging;
 
@@ -36,10 +36,14 @@ const HEAP_START: usize = 0o000_001_000_0000;
 /// The size of the kernel heap
 const HEAP_SIZE: usize = 100 * 1024;
 
-/// A static `StackFrameAllocator`. Will always be Some(StackFrameAlloator)
-/// after init runs. This cannot be used while `ACTIVE_TABLE` is being used,
-/// or it will lock the thread.
-pub static FRAME_ALLOCATOR: Mutex<Option<StackFrameAllocator>> = Mutex::new(None);
+/// A struct that gives access to the physical and virtual memory managers.
+struct MemoryController {
+    active_table:ActivePageTable,
+    frame_allocator: FrameBitmap,
+}
+
+/// A static `MemoryController`. Will always be Some(_) after init completes.
+static MEMORY_CONTROLLER: Mutex<Option<MemoryController>> = Mutex::new(None);
 
 /// Initializes memory to a defined state.
 ///
@@ -75,15 +79,22 @@ pub fn init(boot_info: &BootInformation) {
              boot_info.start_address() - KERNEL_BASE,
              boot_info.end_address() - KERNEL_BASE);
 
-    unsafe { *FRAME_ALLOCATOR.lock() = Some(
-        StackFrameAllocator::new(AreaFrameIter::new(kernel_start as usize,
-                                                    kernel_end as usize,
-                                                    boot_info.start_address() - KERNEL_BASE,
-                                                    boot_info.end_address() - KERNEL_BASE,
-                                                    memory_map_tag.memory_areas()))
-    )}
+    let mut active_table = unsafe {paging::ActivePageTable::new()};
 
-    paging::remap_the_kernel(boot_info);
+    let frame_allocator =
+        AreaFrameAllocator::new(kernel_start as usize,
+                                kernel_end as usize,
+                                boot_info.start_address() - KERNEL_BASE,
+                                boot_info.end_address() - KERNEL_BASE,
+                                memory_map_tag.memory_areas());
+
+    let frame_bitmap =
+        paging::remap_the_kernel(&mut active_table, frame_allocator, boot_info);
+
+    *MEMORY_CONTROLLER.lock() = Some(MemoryController {
+        active_table: active_table,
+        frame_allocator: frame_bitmap,
+    });
 
     use self::paging::Page;
     use hole_list_allocator;
@@ -150,15 +161,9 @@ impl Iterator for FrameIter {
 }
 
 /// A trait for the ability to allocate and deallocate `Frame`s
-pub trait FrameAllocator {
+pub trait FrameAllocate {
     fn allocate_frame(&mut self) -> Option<Frame>;
+}
+pub trait FrameDeallocate {
     fn deallocate_frame(&mut self, frame: Frame);
-
-    fn transfer_frames<A>(&mut self, other: &mut A)
-        where A: FrameAllocator
-    {
-        while let Some(frame) = other.allocate_frame() {
-            self.deallocate_frame(frame);
-        }
-    }
 }

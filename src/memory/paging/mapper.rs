@@ -10,7 +10,7 @@
 use super::{VirtualAddress, PhysicalAddress, Page, ENTRY_COUNT};
 use super::entry::*;
 use super::table::{self, Table, Level4};
-use memory::{PAGE_SIZE, Frame, FrameAllocator};
+use memory::{PAGE_SIZE, Frame, FrameAllocate, FrameDeallocate};
 use core::ptr::Unique;
 
 /// An interface to the active page table.
@@ -88,10 +88,10 @@ impl Mapper {
     }
 
     /// Maps the page to the frame with the provided flags
-    /// The `PRESENT` flag is set by default. Needs a
-    /// `FrameAllocator` as it might need to create new page tables
+    /// The `PRESENT` flag is set by default. Needs an allocator as it might
+    /// need to create new page tables
     pub fn map_to<A>(&mut self, page: Page, frame: Frame, flags: EntryFlags, allocator: &mut A)
-        where A: FrameAllocator
+        where A: FrameAllocate
     {
         let mut p3 = self.p4_mut().next_table_create(page.p4_index(), allocator);
         let mut p2 = p3.next_table_create(page.p3_index(), allocator);
@@ -102,9 +102,9 @@ impl Mapper {
     }
 
     /// Maps the page to some free frame with the provided flags.
-    /// The free frame is allocated with the given `FrameAllocator`
+    /// The free frame is allocated with the given allocator
     pub fn map<A>(&mut self, page: Page, flags: EntryFlags, allocator: &mut A)
-        where A: FrameAllocator
+        where A: FrameAllocate
     {
         let frame = allocator.allocate_frame()
             .expect("Out of Memory :(");
@@ -112,18 +112,18 @@ impl Mapper {
     }
 
     /// Identity map the given frame with the provided Flags.
-    /// The `FrameAllocator is used to create a new page table if needed.
+    /// The allocator is used to create a new page table if needed.
     pub fn identity_map<A>(&mut self, frame: Frame, flags: EntryFlags, allocator: &mut A)
-        where A: FrameAllocator
+        where A: FrameAllocate
     {
         let page = Page::containing_address(frame.start_address());
         self.map_to(page, frame, flags, allocator)
     }
 
     /// Unmaps the given page and adds all freed frames to the
-    /// given `FrameAllocator`
+    /// given allocator
     pub fn unmap<A>(&mut self, page: Page, allocator: &mut A)
-        where A: FrameAllocator
+        where A: FrameDeallocate
     {
         assert!(self.translate(page.start_address()).is_some());
 
