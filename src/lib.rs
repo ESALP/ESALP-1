@@ -75,11 +75,11 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) {
         }
     }
 
-    // Initialize the IDT
-    interrupts::init();
-
     // Initialize memory
     memory::init(&boot_info);
+
+    // Initialize the IDT
+    interrupts::init();
 
     println!("Try to write some things!");
     vga_buffer::change_color(vga_buffer::Color::White, vga_buffer::Color::Black);

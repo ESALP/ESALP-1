@@ -9,10 +9,16 @@
 
 #![allow(dead_code)]
 
-use spin::Mutex;
+use spin::{Mutex, Once};
 
+use x86_64::VirtualAddress;
 use x86_64::structures::idt::Idt;
 use x86_64::structures::idt::{ExceptionStackFrame, PageFaultErrorCode};
+use x86_64::structures::tss::TaskStateSegment;
+
+use self::gdt::Gdt;
+
+use memory;
 
 use self::pic::ChainedPICs;
 pub use self::keyboard::KEYBOARD;
@@ -23,6 +29,8 @@ mod keyboard;
 mod cpuio;
 /// The programmable interrupt controller
 mod pic;
+/// Abstraction of the Global Descriptor Table
+mod gdt;
 
 extern "C" {
     /// Enable interrupts
@@ -39,7 +47,11 @@ lazy_static! {
         // Initialize handlers
         idt.divide_by_zero.set_handler_fn(de_handler);
         idt.breakpoint.set_handler_fn(breakpoint_handler);
-        idt.double_fault.set_handler_fn(df_handler);
+        unsafe {
+            // Use another stack to prevent triple faults
+            idt.double_fault.set_handler_fn(df_handler)
+                .set_stack_index(DF_TSS_INDEX as u16);
+        }
         idt.general_protection_fault.set_handler_fn(gp_handler);
         idt.page_fault.set_handler_fn(pf_handler);
         // PIC handlers
@@ -53,7 +65,48 @@ lazy_static! {
 /// The Rust interface to the 8086 Programmable Interrupt Controller
 pub static PIC: Mutex<ChainedPICs> = Mutex::new(unsafe { ChainedPICs::new(0x20, 0x28) });
 
+const DF_TSS_INDEX: usize = 0;
+
+/// Static Task State Segment
+static TSS: Once<TaskStateSegment> = Once::new();
+/// Static Gdt
+static GDT: Once<Gdt> = Once::new();
+
 pub fn init() {
+    let double_fault_stack = memory::alloc_stack(1)
+        .expect("Could not allocate double fault stack");
+
+    let tss = TSS.call_once(|| {
+        let mut tss = TaskStateSegment::new();
+        tss.interrupt_stack_table[DF_TSS_INDEX] =
+            VirtualAddress(double_fault_stack.top());
+        tss
+    });
+
+    // Create a new GDT with a code segment and TSS segment and then load both
+    // segments
+    use x86_64::structures::gdt::SegmentSelector;
+    use x86_64::instructions::segmentation::set_cs;
+    use x86_64::instructions::tables::load_tss;
+    let mut code_selector = SegmentSelector(0);
+    let mut tss_selector = SegmentSelector(0);
+    let gdt = GDT.call_once(|| {
+        let mut gdt = gdt::Gdt::new();
+        code_selector =
+            gdt.add_entry(gdt::Descriptor::kernel_code_segment());
+        tss_selector =
+            gdt.add_entry(gdt::Descriptor::tss_segment(&tss));
+        gdt
+    });
+    gdt.load();
+
+    unsafe {
+        // Reload code segment register
+        set_cs(code_selector);
+        // load TSS
+        load_tss(tss_selector);
+    }
+
     IDT.load();
     unsafe {
         {
@@ -130,7 +183,7 @@ extern "x86-interrupt" fn breakpoint_handler(stack_frame: &mut ExceptionStackFra
 ///                          | General Protection Fault
 /// ------------------------ | ------------------------
 extern "x86-interrupt" fn df_handler(stack_frame: &mut ExceptionStackFrame, _: u64) {
-    println!("\nEXCEPTION: DOUBLE FAULT\n{:#?}", stack_frame)
+    panic!("\nEXCEPTION: DOUBLE FAULT\n{:#?}", stack_frame)
 }
 
 /// General Protection Fault handler

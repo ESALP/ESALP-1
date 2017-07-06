@@ -8,6 +8,7 @@
 // except according to those terms.
 
 use core::ops::{Deref, DerefMut};
+use core::ops::Add;
 
 use multiboot2::{BootInformation, StringTable};
 use spin::Mutex;
@@ -117,6 +118,7 @@ impl Page {
         let &mut MemoryController {
             ref mut active_table,
             ref mut frame_allocator,
+            stack_allocator: _,
         } = lock.as_mut().unwrap();
         active_table.map_to(self, frame, flags, frame_allocator);
     }
@@ -130,6 +132,7 @@ impl Page {
         let &mut MemoryController {
             ref mut active_table,
             ref mut frame_allocator,
+            stack_allocator: _,
         } = lock.as_mut().unwrap();
         active_table.map(self, flags, frame_allocator);
 
@@ -141,9 +144,18 @@ impl Page {
         let &mut MemoryController {
             ref mut active_table,
             ref mut frame_allocator,
+            stack_allocator: _,
         } = lock.as_mut().unwrap();
 
         active_table.unmap(self, frame_allocator);
+    }
+}
+
+impl Add<usize> for Page {
+    type Output = Page;
+
+    fn add(self, rhs: usize) -> Page {
+        Page(self.0 + rhs)
     }
 }
 
@@ -154,6 +166,7 @@ fn identity_map(frame: Frame, flags: EntryFlags) {
 }
 
 /// An iterator across `Page`s
+#[derive(Clone)]
 pub struct PageIter {
     start: Page,
     end: Page,

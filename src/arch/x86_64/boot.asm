@@ -249,6 +249,15 @@ extern puts
 
 global start_high
 start_high:
+	; Segments are no longer needed.
+	; Null all data segment registers
+	mov ax, 0
+	mov ss, ax
+	mov ds, ax
+	mov es, ax,
+	mov fs, ax
+	mov gs, ax
+
 	; Set up high stack
 	add rsp, KERNEL_BASE
 
@@ -257,12 +266,6 @@ start_high:
 	mov rax, low_p2_table - KERNEL_BASE
 	or rax, 11b ; present + writable
 	mov [rel low_p3_table], rax
-
-	; set up the segment registers
-	mov ax, GDT.data ; data offset
-	mov ss, ax
-	mov ds, ax
-	mov es, ax
 
 	; Save the multiboot address
 	push rdi
@@ -305,8 +308,6 @@ GDT:
 	dq 0 ; zero entry
 .code equ $ - GDT
 	dq (1<<44) | (1<<47) | (1<<41) | (1<<43) | (1<<53) ; code segment
-.data equ $ - GDT
-	dq (1<<44) | (1<<47) | (1<<41) ; data segment
 .end equ $
 .ptr_low:
 	dw .end - GDT - 1

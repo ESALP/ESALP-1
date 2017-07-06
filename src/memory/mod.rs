@@ -13,11 +13,15 @@ use spin::Mutex;
 
 use multiboot2::BootInformation;
 
-pub use self::area_frame_allocator::AreaFrameAllocator;
+pub use self::stack_allocator::Stack;
+
+use self::area_frame_allocator::AreaFrameAllocator;
 use self::frame_bitmap::FrameBitmap;
 use self::paging::PhysicalAddress;
 use self::paging::ActivePageTable;
 
+/// Allocator for stacks
+mod stack_allocator;
 /// Allocator for physical frames.
 mod area_frame_allocator;
 /// Physical frame allocator that uses a bitmap.
@@ -40,10 +44,26 @@ const HEAP_SIZE: usize = 100 * 1024;
 struct MemoryController {
     active_table:ActivePageTable,
     frame_allocator: FrameBitmap,
+    stack_allocator: stack_allocator::StackAllocator,
 }
 
 /// A static `MemoryController`. Will always be Some(_) after init completes.
 static MEMORY_CONTROLLER: Mutex<Option<MemoryController>> = Mutex::new(None);
+
+
+/// Allocates a stack of `size` pages
+pub fn alloc_stack(size: usize) -> Option<Stack> {
+    let mut lock = MEMORY_CONTROLLER.lock();
+    let &mut MemoryController {
+        ref mut active_table,
+        ref mut frame_allocator,
+        ref mut stack_allocator,
+    } = lock.as_mut().unwrap();
+
+    stack_allocator.alloc_stack(active_table,
+                                frame_allocator,
+                                size)
+}
 
 /// Initializes memory to a defined state.
 ///
@@ -79,6 +99,9 @@ pub fn init(boot_info: &BootInformation) {
              boot_info.start_address() - KERNEL_BASE,
              boot_info.end_address() - KERNEL_BASE);
 
+    let heap_start_page = Page::containing_address(HEAP_START);
+    let heap_end_page = Page::containing_address(HEAP_START + HEAP_SIZE - 1);
+
     let mut active_table = unsafe {paging::ActivePageTable::new()};
 
     let frame_allocator =
@@ -91,16 +114,22 @@ pub fn init(boot_info: &BootInformation) {
     let frame_bitmap =
         paging::remap_the_kernel(&mut active_table, frame_allocator, boot_info);
 
+    let stack_allocator = {
+        let alloc_start = heap_end_page + 1;
+        let alloc_end = alloc_start + 100;
+        let alloc_range = Page::range_inclusive(alloc_start, alloc_end);
+
+        stack_allocator::StackAllocator::new(alloc_range)
+    };
+
     *MEMORY_CONTROLLER.lock() = Some(MemoryController {
         active_table: active_table,
         frame_allocator: frame_bitmap,
+        stack_allocator: stack_allocator,
     });
 
     use self::paging::Page;
     use hole_list_allocator;
-
-    let heap_start_page = Page::containing_address(HEAP_START);
-    let heap_end_page = Page::containing_address(HEAP_START + HEAP_SIZE - 1);
 
     for page in Page::range_inclusive(heap_start_page, heap_end_page) {
         page.map(paging::WRITABLE);
