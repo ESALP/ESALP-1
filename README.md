@@ -3,9 +3,9 @@
 
 It is an implimentation of Phillipp Oppermann's [Blog OS](https://github.com/phil-opp/blog_os), go check out that repository and [his blog](http://os.phil-opp.com/) for more details.
 
-Project Goals:
+## Project Goals
 + No C environment
- + ESALP will be written in Rust (and some Assembler of course)
+  + ESALP will be written in Rust (and some Assembler of course)
 + Flexibility
 + **More to come**
 
@@ -14,17 +14,20 @@ Project Goals:
 Right now it doesn't do much, but more is added every day!
 
 Current features:
-+ Can print to the VGA text buffer (in 255 different colors!)
-+ Simple PS/2 keyboard driver
- + with multiple keyboard maps
-+ Simple paging
- + With physical frame allocation _and_ deallocation
-+ Kernel space heap
++ Interaction
+  + Can print to the VGA text buffer (in 255 different colors!)
+  + Simple PS/2 keyboard driver
+    + with multiple keyboard maps
++ Memory
+  + Simple paging
+    + With physical frame allocation _and_ deallocation
+  + Kernel space heap
 + **More to come**
 
 ## How to Compile
-1. Use `make all` to build ESALP
-2. `make run` and you're done!
+1. Install packages, ESALP requires `xargo`, `nasm`, `grub-mkrescue`, `ld`, and a unix environment to build. To run, use `qemu`.
+2. Use `make all` to build ESALP
+3. `make run` and you're done!
 
 ### Notes:
 + If your system binutils is not x86_64-elf format, you need to cross-compile binutils. By adding `cross=yes` to both make commands, the prefix `x86_64-elf-` will be added to all binutils commands.
