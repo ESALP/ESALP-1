@@ -1,7 +1,7 @@
 [package]
 authors = ["JJ Garzella <jjgarzella@gmail.com>", "Calvin Lee <cyrus296@gmail.com>"]
 name = "ESALP"
-version = "0.1.0"
+version = "0.1.1"
 
 [dependencies]
 bit_field = "0.7.0"
