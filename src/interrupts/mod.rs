@@ -234,8 +234,38 @@ extern "x86-interrupt" fn kb_handler(_: &mut ExceptionStackFrame) {
             let mut byte = kb.kbmap[x as usize];
 
             // If either shift is pressed, make it
-            // capital as long as it is alphabetic
-            byte -= 0x20 * ((kb.keys[42] || kb.keys[54]) && byte > 96 && byte < 123) as u8;
+            // capital.
+            byte = if kb.keys[42] || kb.keys[54] {
+                match byte {
+                    b if b >= b'a' && b <= b'z' => b - 0x20,
+
+                    b'1' => b'!',
+                    b'2' => b'@',
+                    b'3' => b'#',
+                    b'4' => b'$',
+                    b'5' => b'%',
+                    b'6' => b'^',
+                    b'7' => b'&',
+                    b'8' => b'*',
+                    b'9' => b'(',
+                    b'0' => b')',
+
+                    b'`' => b'~',
+                    b'-' => b'_',
+                    b'=' => b'+',
+                    b'[' => b'{',
+                    b']' => b'}',
+                    b'\\'=> b'|',
+                    b';' => b':',
+                    b'\''=> b'\"',
+                    b',' => b'<',
+                    b'.' => b'>',
+
+                    _ => b'\0',
+                }
+            } else {
+                byte
+            };
             print!("{}", byte as char);
         }
         // If this runs a key was released
