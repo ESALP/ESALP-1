@@ -1,4 +1,4 @@
-/* Copyright 2016 Phillip Oppermann, Calvin Lee and JJ Garzella.
+/* Copyright 2017 Phillip Oppermann, Calvin Lee and JJ Garzella.
  * See the README.md file at the top-level directory of this
  * distribution.
  *
@@ -46,23 +46,14 @@ SECTIONS {
 		*(.rodata .rodata.*)
 	}
 
-	.got ALIGN(4K) : AT(ADDR(.got) - KERNEL_BASE)
-	{
-		*(.got)
-	}
-
-	.got.plt ALIGN(4K) : AT(ADDR(.got.plt) - KERNEL_BASE)
-	{
-		*(.got.plt)
-	}
-
 	.data.rel.ro ALIGN(4K) : AT(ADDR(.data.rel.ro) - KERNEL_BASE)
 	{
 		*(.data.rel.ro.local*) *(.data.rel.ro .data.rel.ro.*)
 	}
 
-	.gcc_except_table ALIGN(4K) : AT(ADDR(.gcc_except_table) - KERNEL_BASE)
-	{
+
+	/DISCARD/ : {
 		*(.gcc_except_table)
+		*(.debug*)
 	}
 }

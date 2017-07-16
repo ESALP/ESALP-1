@@ -59,7 +59,7 @@ extern "C" {
 /// This clears the screen, initializes each module and enters an infinite
 /// loop.
 #[no_mangle]
-pub extern "C" fn rust_main(multiboot_info_address: usize) {
+pub extern "C" fn rust_main(multiboot_info_address: usize) -> ! {
     vga_buffer::clear_screen();
     println!("Hello Rust log \x01");
 
