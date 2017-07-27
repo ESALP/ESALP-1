@@ -66,7 +66,7 @@ impl FrameBitmap {
         // kernel.
         let mut bitmap = FrameBitmap {
             bottom: unsafe {
-                Unique::new(0o177777_777_777_000_000_0000 as *mut BitmapEntry)
+                Unique::new_unchecked(0o177777_777_777_000_000_0000 as *mut BitmapEntry)
             },
             size: 0,
             current: 0,

@@ -19,8 +19,5 @@ path = "libs/hole_list_allocator"
 features = ["spin_no_std"]
 version = "0.2.1"
 
-[dependencies.log_buffer]
-git = "https://github.com/ESALP/rust-log_buffer"
-
 [lib]
 crate-type = ["staticlib"]
