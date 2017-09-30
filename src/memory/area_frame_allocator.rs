@@ -85,67 +85,50 @@ impl<'a> FrameAllocate for AreaFrameAllocator<'a> {
                low <= frame && frame <= high 
             };
 
-            let mut f_unused = true;
-            match frame {
+            if match frame {
                 ref f if &current_area_last_frame < f 
                     // all frames of current area are used, switch to the new area
                     => {
                         self.choose_next_area();
-                        f_unused = false;
+                        false
                     },
-                ref f if contained_by(&frame, &self.kernel_start, &self.kernel_end) 
+                ref f if contained_by(f, &self.kernel_start, &self.kernel_end) 
                     // 'frame' is used by the kernel
                     => {
                         self.next_free_frame = Frame(self.kernel_end.0 + 1);
-                        f_unused = false;
+                        false
                     },
-                ref f if contained_by(&frame, &self.multiboot_start, &self.multiboot_end)
+                ref f if contained_by(f, &self.multiboot_start, &self.multiboot_end)
                     // 'frame' is used by the multiboot information structure
                     => {
                         self.next_free_frame = Frame(self.multiboot_end.0 + 1);
-                        f_unused = false;
+                        false
                     },
                 ref f => {
+                    let mut unused = true;
                     for module in self.boot_info.module_tags() {
                         let start = module.start_address() as usize + KERNEL_BASE;
                         let end = module.end_address() as usize + KERNEL_BASE;
                         let startFrame = Frame::containing_address(start);
                         let endFrame = Frame::containing_address(end);
-                        if contained_by(&frame, &startFrame, &endFrame) {
+                        if contained_by(f, &startFrame, &endFrame) {
                             // 'frame' is used by the multiboot structure
                             self.next_free_frame = Frame(endFrame.0 + 1);
-                            f_unused = false;
+                            unused = false;
+                            break;
                         }
                     }
+                    unused
                 },
-            };
-
-            if f_unused {
+            } {
                 // hooray! we can allocate the frame!
                 self.next_free_frame.0 += 1;
                 return Some(frame);
-
-            } else {
-                // At this point, the frame has failed to allocate, recurse.
-                self.allocate_frame()
             }
-//
-//            if frame > current_area_last_frame {
-//                // all frames of current area are used, switch to the new area
-//                self.choose_next_area();
-//            } else if frame >= self.kernel_start && frame <= self.kernel_end {
-//                // 'frame' is used by the kernel
-//                self.next_free_frame = Frame(self.kernel_end.0 + 1)
-//            } else if frame >= self.multiboot_start && frame <= self.multiboot_end {
-//                // 'frame' is used by the multiboot information structure
-//                self.next_free_frame = Frame(self.multiboot_end.0 + 1)
-//            } else {
-//                // frame is unused, increment 'next_free_frame' and return it
-//                self.next_free_frame.0 += 1;
-//                return Some(frame);
-//            }
-//            // 'frame' was not valid, try again with the new 'next_free_frame'
-//            self.allocate_frame()
+            
+            // At this point, the frame has failed to allocate, recurse.
+            self.allocate_frame()
+    
         } else {
             None // no free frames
         }
