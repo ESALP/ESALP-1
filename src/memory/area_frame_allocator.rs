@@ -7,11 +7,13 @@
 // This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use memory::{Frame, FrameAllocate};
+use multiboot2::BootInformation;
+
+use memory::{Frame, FrameAllocate, KERNEL_BASE};
 use multiboot2::{MemoryAreaIter, MemoryArea};
 
 /// An iterator acrossed physical frames using memory areas.
-pub struct AreaFrameAllocator {
+pub struct AreaFrameAllocator<'a> {
     next_free_frame: Frame,
     current_area: Option<&'static MemoryArea>,
     areas: MemoryAreaIter,
@@ -19,14 +21,16 @@ pub struct AreaFrameAllocator {
     kernel_end: Frame,
     multiboot_start: Frame,
     multiboot_end: Frame,
+    boot_info: &'a BootInformation,
 }
 
-impl AreaFrameAllocator {
+impl<'a> AreaFrameAllocator<'a> {
     /// Returns a new `AreaFrameAllocator`
     pub fn new(kernel_start: usize,
                kernel_end: usize,
                multiboot_start: usize,
                multiboot_end: usize,
+               boot_info: &BootInformation,
                memory_areas: MemoryAreaIter)
                -> AreaFrameAllocator {
         let mut alloc = AreaFrameAllocator {
@@ -37,6 +41,7 @@ impl AreaFrameAllocator {
             kernel_end: Frame::containing_address(kernel_end),
             multiboot_start: Frame::containing_address(multiboot_start),
             multiboot_end: Frame::containing_address(multiboot_end),
+            boot_info: boot_info, 
         };
         alloc.choose_next_area();
         alloc
@@ -62,7 +67,8 @@ impl AreaFrameAllocator {
 }
     type Item = Frame;
 
-impl FrameAllocate for AreaFrameAllocator {
+impl<'a> FrameAllocate for AreaFrameAllocator<'a> {
+
     fn allocate_frame(&mut self) -> Option<Frame> {
         if let Some(area) = self.current_area {
             // "Clone the area to return it if it's free. Frame doesn't
@@ -74,23 +80,72 @@ impl FrameAllocate for AreaFrameAllocator {
                 let address = area.base_addr + area.length - 1;
                 Frame::containing_address(address as usize)
             };
+            
+            let contained_by = |frame: &Frame, low: &Frame, high: &Frame| -> bool {
+               low <= frame && frame <= high 
+            };
 
-            if frame > current_area_last_frame {
-                // all frames of current area are used, switch to the new area
-                self.choose_next_area();
-            } else if frame >= self.kernel_start && frame <= self.kernel_end {
-                // 'frame' is used by the kernel
-                self.next_free_frame = Frame(self.kernel_end.0 + 1)
-            } else if frame >= self.multiboot_start && frame <= self.multiboot_end {
-                // 'frame' is used by the multiboot information structure
-                self.next_free_frame = Frame(self.multiboot_end.0 + 1)
-            } else {
-                // frame is unused, increment 'next_free_frame' and return it
+            let mut f_unused = true;
+            match frame {
+                ref f if &current_area_last_frame < f 
+                    // all frames of current area are used, switch to the new area
+                    => {
+                        self.choose_next_area();
+                        f_unused = false;
+                    },
+                ref f if contained_by(&frame, &self.kernel_start, &self.kernel_end) 
+                    // 'frame' is used by the kernel
+                    => {
+                        self.next_free_frame = Frame(self.kernel_end.0 + 1);
+                        f_unused = false;
+                    },
+                ref f if contained_by(&frame, &self.multiboot_start, &self.multiboot_end)
+                    // 'frame' is used by the multiboot information structure
+                    => {
+                        self.next_free_frame = Frame(self.multiboot_end.0 + 1);
+                        f_unused = false;
+                    },
+                ref f => {
+                    for module in self.boot_info.module_tags() {
+                        let start = module.start_address() as usize + KERNEL_BASE;
+                        let end = module.end_address() as usize + KERNEL_BASE;
+                        let startFrame = Frame::containing_address(start);
+                        let endFrame = Frame::containing_address(end);
+                        if contained_by(&frame, &startFrame, &endFrame) {
+                            // 'frame' is used by the multiboot structure
+                            self.next_free_frame = Frame(endFrame.0 + 1);
+                            f_unused = false;
+                        }
+                    }
+                },
+            };
+
+            if f_unused {
+                // hooray! we can allocate the frame!
                 self.next_free_frame.0 += 1;
                 return Some(frame);
+
+            } else {
+                // At this point, the frame has failed to allocate, recurse.
+                self.allocate_frame()
             }
-            // 'frame' was not valid, try again with the new 'next_free_frame'
-            self.allocate_frame()
+//
+//            if frame > current_area_last_frame {
+//                // all frames of current area are used, switch to the new area
+//                self.choose_next_area();
+//            } else if frame >= self.kernel_start && frame <= self.kernel_end {
+//                // 'frame' is used by the kernel
+//                self.next_free_frame = Frame(self.kernel_end.0 + 1)
+//            } else if frame >= self.multiboot_start && frame <= self.multiboot_end {
+//                // 'frame' is used by the multiboot information structure
+//                self.next_free_frame = Frame(self.multiboot_end.0 + 1)
+//            } else {
+//                // frame is unused, increment 'next_free_frame' and return it
+//                self.next_free_frame.0 += 1;
+//                return Some(frame);
+//            }
+//            // 'frame' was not valid, try again with the new 'next_free_frame'
+//            self.allocate_frame()
         } else {
             None // no free frames
         }
