@@ -109,6 +109,7 @@ pub fn init(boot_info: &BootInformation) {
                                 kernel_end as usize,
                                 boot_info.start_address() - KERNEL_BASE,
                                 boot_info.end_address() - KERNEL_BASE,
+                                boot_info,
                                 memory_map_tag.memory_areas());
 
     let frame_bitmap =

@@ -9,6 +9,10 @@
 
 #![allow(non_snake_case)]
 
+#![feature(const_unsafe_cell_new)]
+#![feature(const_atomic_usize_new)]
+#![feature(const_unique_new)]
+
 #![feature(lang_items)]
 #![feature(alloc)]
 #![feature(const_fn, unique)]
