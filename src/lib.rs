@@ -54,6 +54,8 @@ mod memory;
 pub mod interrupts;
 /// IO abstractions in Rust
 mod cpuio;
+/// Testing
+mod tap;
 
 extern "C" {
     /// The kernel exit point. It disables interrupts, enters an infinite loop,
