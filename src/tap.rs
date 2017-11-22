@@ -11,7 +11,7 @@ use core::fmt::Write;
 
 pub struct TAPTestGroup<'a, T: 'a + Write> {
     writer: &'a mut T,
-    count: u8,
+    pub count: u8,
 }
 
 impl<'a, T> TAPTestGroup<'a, T> 
@@ -24,22 +24,22 @@ impl<'a, T> TAPTestGroup<'a, T>
         }
     }
 
-    fn plan(&mut self) {
+    pub fn plan(&mut self) {
         self.writer.write_fmt(format_args!("0..{}", self.count));
     }
 
-    fn ok(&mut self, message: Option<&str>) {
+    pub fn ok(&mut self, message: Option<&str>) {
         match message {
             Some(s) => self.writer.write_fmt(format_args!("ok {}\n", s)),
             None => self.writer.write_str("ok \n"),
         };
     }
 
-    fn not_ok(&mut self, message: &str) {
+    pub fn not_ok(&mut self, message: &str) {
         self.writer.write_fmt(format_args!("not ok {}", message));
     }
 
-    fn assert_tap(&mut self, cond: bool, message: &str) {
+    pub fn assert_tap(&mut self, cond: bool, message: &str) {
         if cond {
             self.ok(None);
         } else {

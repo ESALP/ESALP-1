@@ -197,3 +197,24 @@ pub trait FrameAllocate {
 pub trait FrameDeallocate {
     fn deallocate_frame(&mut self, frame: Frame);
 }
+
+/// Tests
+
+pub fn run_tests() {
+    use super::vga_buffer::WRITER;
+    use super::tap::TAPTestGroup;
+    let mut writer = &mut *WRITER.lock();
+    let mut test_group = TAPTestGroup::new(writer);
+    test_group.count = 1;
+    test_group.plan();
+    // run the tests
+    test_memory_alloc(test_group);
+}
+
+pub fn test_memory_alloc<W>(mut tap: super::tap::TAPTestGroup<W>) 
+        where W: ::core::fmt::Write {
+    use alloc::boxed::Box;
+    let mut heap_test = Box::new(42);
+    tap.ok(None);
+    tap.assert_tap(*heap_test == 42, "Pointer allocation failed");
+}
