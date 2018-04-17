@@ -19,6 +19,7 @@
 #![feature(associated_type_defaults)]
 #![feature(asm)]
 #![feature(abi_x86_interrupt)]
+#![feature(ptr_internals)]
 #![no_std]
 
 // crates.io crates
@@ -101,6 +102,7 @@ pub extern "C" fn _Unwind_Resume() -> ! {
 }
 
 #[lang = "eh_personality"]
+#[no_mangle]
 extern "C" fn eh_personality() {}
 /// Runs during a `panic!()`
 #[no_mangle]
