@@ -103,7 +103,7 @@ pub extern "C" fn _Unwind_Resume() -> ! {
 
 #[lang = "eh_personality"]
 #[no_mangle]
-extern "C" fn eh_personality() {}
+pub extern "C" fn eh_personality() {}
 /// Runs during a `panic!()`
 #[no_mangle]
 #[lang = "panic_fmt"]
