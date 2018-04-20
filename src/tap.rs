@@ -7,36 +7,31 @@
 // This file may not be copied, modified, or distributed
 // except according to those terms
 
-use core::fmt::Write;
-
-pub struct TAPTestGroup<'a, T: 'a + Write> {
-    writer: &'a mut T,
+pub struct TAPTestGroup {
     pub count: u8,
 }
 
-impl<'a, T> TAPTestGroup<'a, T> 
-    where T: Write {
+impl TAPTestGroup {
 
-    pub fn new(w: &mut T) -> TAPTestGroup<T> {
-        TAPTestGroup::<T> {
-            writer: w,
+    pub fn new() -> TAPTestGroup {
+        TAPTestGroup {
             count: 0,
         }
     }
 
     pub fn plan(&mut self) {
-        self.writer.write_fmt(format_args!("0..{}", self.count));
+        println!("0..{}", self.count);
     }
 
     pub fn ok(&mut self, message: Option<&str>) {
         match message {
-            Some(s) => self.writer.write_fmt(format_args!("ok {}\n", s)),
-            None => self.writer.write_str("ok \n"),
+            Some(s) => println!("ok {}\n", s),
+            None => println!("ok \n"),
         };
     }
 
     pub fn not_ok(&mut self, message: &str) {
-        self.writer.write_fmt(format_args!("not ok {}", message));
+        println!("not ok {}", message);
     }
 
     pub fn assert_tap(&mut self, cond: bool, message: &str) {
