@@ -13,28 +13,28 @@ pub struct TAPTestGroup {
 
 impl TAPTestGroup {
 
-    pub fn new() -> TAPTestGroup {
+    pub fn new(c: u8) -> TAPTestGroup {
         TAPTestGroup {
-            count: 0,
+            count: c,
         }
     }
 
-    pub fn plan(&mut self) {
+    pub fn plan(&self) {
         println!("0..{}", self.count);
     }
 
-    pub fn ok(&mut self, message: Option<&str>) {
+    pub fn ok(&self, message: Option<&str>) {
         match message {
             Some(s) => println!("ok {}\n", s),
             None => println!("ok \n"),
         };
     }
 
-    pub fn not_ok(&mut self, message: &str) {
+    pub fn not_ok(&self, message: &str) {
         println!("not ok {}", message);
     }
 
-    pub fn assert_tap(&mut self, cond: bool, message: &str) {
+    pub fn assert_tap(&self, cond: bool, message: &str) {
         if cond {
             self.ok(None);
         } else {

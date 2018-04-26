@@ -200,18 +200,24 @@ pub trait FrameDeallocate {
 
 /// Tests
 
-pub fn run_tests() {
-    use super::tap::TAPTestGroup;
-    let mut test_group = TAPTestGroup::new();
-    test_group.count = 1;
-    test_group.plan();
-    // run the tests
-    test_memory_alloc(test_group);
-}
+pub mod tests {
 
-pub fn test_memory_alloc(mut tap: super::tap::TAPTestGroup) {
-    use alloc::boxed::Box;
-    //let mut heap_test = Box::new(42); // this line causing page fault
-    tap.ok(None);
-    //tap.assert_tap(*heap_test == 42, "Pointer allocation failed");
+    use ::tap::TAPTestGroup;
+    
+    pub fn run_tests() {
+        // run the tests
+        test_memory_alloc();
+        super::paging::tests::test_paging();
+    }
+    
+    fn test_memory_alloc() {
+        use alloc::boxed::Box;
+        
+        let test_group = TAPTestGroup::new(1);
+        test_group.plan();
+        
+        //let mut heap_test = Box::new(42); // this line causing page fault
+        test_group.ok(None);
+        //test_group.assert_tap(*heap_test == 42, "Pointer allocation failed");
+    }
 }

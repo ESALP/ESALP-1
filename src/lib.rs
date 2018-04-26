@@ -106,7 +106,7 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) -> ! {
 
 pub fn run_tests() {
     //vga_buffer::run_tests();
-    memory::run_tests();
+    memory::tests::run_tests();
     //interrupts::run_tests();
 }
 
