@@ -82,12 +82,16 @@ impl<L> Table<L>
         where A: FrameAllocate
     {
         if self.next_table(index).is_none() {
+            println!("{:?}", self.next_table_mut(index).is_some());
             assert!(!self.entries[index].flags().contains(HUGE_PAGE),
                     "Mapping code does not support huge pages");
             let frame = allocator.allocate_frame()
                 .expect("No frames availible :(");
             self.entries[index].set(frame, PRESENT | WRITABLE);
+            println!("{:?}", self.next_table_mut(index).is_some());
+            println!("{:?}", index);
             self.next_table_mut(index).unwrap().zero();
+            println!("{:?}", self.next_table_mut(index).is_some());
             assert!(self.next_table_mut(index).is_some());
         }
         self.next_table_mut(index).unwrap()
