@@ -7,11 +7,46 @@
 // This file may not be copied, modified, or distributed
 // except according to those terms.
 
+//!  Code used to handle exceptions (NMIs) and other interrupts. This includes
+//!  the keyboard and timer.
+//!
+//!  Exceptions:
+//!
+//!  | Name                                   | Vector #   |    Type     | Mnemonic | Error Code? |
+//!  | -------------------------------------- | ---------- | ----------- | -------- | ----------- |
+//!  | Divide by Zero                         | 0  (0x0)   | Fault       | #DE      | No          |
+//!  | Debug                                  | 1  (0x1)   | Both        | #DB      | No          |
+//!  | Non-maskable Interrupt                 | 2  (0x2)   | Interrupt   | -        | No          |
+//!  | Breakpoint                             | 3  (0x3)   | Trap        | #BP      | No          |
+//!  | Overflow                               | 4  (0x4)   | Trap        | #OF      | No          |
+//!  | Bound Range Exceeded                   | 5  (0x5)   | Fault       | #BR      | No          |
+//!  | Invalid Opcode                         | 6  (0x6)   | Fault       | #UD      | No          |
+//!  | Device not Available                   | 7  (0x7)   | Fault       | #NM      | No          |
+//!  | Double Fault                           | 8  (0x8)   | Abort       | #DF      | No          |
+//!  | <del>Coprocessor Segment Overrun</del> | 9  (0x9)   | Fault       | -        | No          |
+//!  | Invalid TSS                            | 10 (0xA)   | Fault       | #TS      | Yes         |
+//!  | Segment not Present                    | 11 (0xB)   | Fault       | #NP      | Yes         |
+//!  | Stack-Segment Fault                    | 12 (0xC)   | Fault       | #SS      | Yes         |
+//!  | General Protection Fault               | 13 (0xD)   | Fault       | #GP      | Yes         |
+//!  | Page Fault                             | 14 (0xE)   | Fault       | #PF      | Yes         |
+//!  | Reserved                               | 15 (0xF)   | -           | -        | No          |
+//!  | x87 Floating Point Exception           | 16 (0x10)  | Fault       | #MF      | No          |
+//!  | Alignment Check                        | 17 (0x11)  | Fault       | #AC      | Yes         |
+//!  | Machine Check                          | 18 (0x12)  | Fault       | #MC      | No          |
+//!  | SIMD Floating-Point Exception          | 19 (0x13)  | Fault       | #XM/#XF  | No          |
+//!  | Virtualisation Exception               | 20 (0x14)  | -           | #VE      | No          |
+//!  | Reserved                               | 21 (0x15)  | -           | -        | No          |
+//!  | Security Exception                     | 22 (0x16)  | -           | #SX      | Yes         |
+//!  | Reserved                               | 23 (0x17)  | -           | -        | No          |
+//!  | Triple Fault                           | 24 (0x15)  | -           | -        | No          |
+//!  | FPU Error Interrupt                    | 25 (0x18)  | Interrupt   | #FERR    | No          |
+
 #![allow(dead_code)]
 
 use spin::{Mutex, Once};
 
 use x86_64::VirtualAddress;
+use x86_64::registers;
 use x86_64::structures::idt::Idt;
 use x86_64::structures::idt::{ExceptionStackFrame, PageFaultErrorCode};
 use x86_64::structures::tss::TaskStateSegment;
@@ -117,37 +152,6 @@ pub fn init() {
     }
 }
 
-//  Exceptions:
-//  | Name                          | Vector #   |    Type     | Mnemonic | Error Code? |
-//  | ----------------------------- | ---------- | ----------- | -------- | ----------- |
-//  | Divide by Zero                | 0  (0x0)   | Fault       | #DE      | No          |
-//  | Debug                         | 1  (0x1)   | Both        | #DB      | No          |
-//  | Non-maskable Interrupt        | 2  (0x2)   | Interrupt   | -        | No          |
-//  | Breakpoint                    | 3  (0x3)   | Trap        | #BP      | No          |
-//  | Overflow                      | 4  (0x4)   | Trap        | #OF      | No          |
-//  | Bound Range Exceeded          | 5  (0x5)   | Fault       | #BR      | No          |
-//  | Invalid Opcode                | 6  (0x6)   | Fault       | #UD      | No          |
-//  | Device not Available          | 7  (0x7)   | Fault       | #NM      | No          |
-//  | Double Fault                  | 8  (0x8)   | Abort       | #DF      | No          |
-//  | ~Coprocessor Segment Overrun~ | 9  (0x9)   | Fault       | -        | No          |
-//  | Invalid TSS                   | 10 (0xA)   | Fault       | #TS      | Yes         |
-//  | Segment not Present           | 11 (0xB)   | Fault       | #NP      | Yes         |
-//  | Stack-Segment Fault           | 12 (0xC)   | Fault       | #SS      | Yes         |
-//  | General Protection Fault      | 13 (0xD)   | Fault       | #GP      | Yes         |
-//  | Page Fault                    | 14 (0xE)   | Fault       | #PF      | Yes         |
-//  | Reserved                      | 15 (0xF)   | -           | -        | No          |
-//  | x87 Floating Point Exception  | 16 (0x10)  | Fault       | #MF      | No          |
-//  | Alignment Check               | 17 (0x11)  | Fault       | #AC      | Yes         |
-//  | Machine Check                 | 18 (0x12)  | Fault       | #MC      | No          |
-//  | SIMD Floating-Point Exception | 19 (0x13)  | Fault       | #XM/#XF  | No          |
-//  | Virtualisation Exception      | 20 (0x14)  | -           | #VE      | No          |
-//  | Reserved                      | 21 (0x15)  | -           | -        | No          |
-//  | Security Exception            | 22 (0x16)  | -           | #SX      | Yes         |
-//  | Reserved                      | 23 (0x17)  | -           | -        | No          |
-//  | Triple Fault                  | 24 (0x15)  | -           | -        | No          |
-//  | FPU Error Interrupt           | 25 (0x18)  | Interrupt   | #FERR    | No          |
-//  | ----------------------------- | ---------- | ----------- | -------- | ----------- |
-
 /// Divide by zero handler
 ///
 /// Occurs when the hardware attempts to divide by zero. Unrecoverable.
@@ -210,7 +214,8 @@ extern "x86-interrupt" fn gp_handler(stack_frame: &mut ExceptionStackFrame, erro
 /// + A protection check (privileges, read/write) failed.
 /// + A reserved bit in the page directory or table entries is set to 1.
 extern "x86-interrupt" fn pf_handler(stack_frame: &mut ExceptionStackFrame, error_code: PageFaultErrorCode) {
-    panic!("EXCEPTION PAGE FAULT\nerror_code: {:?}\n{:#?}", error_code, stack_frame);
+    panic!("EXCEPTION PAGE FAULT\nerror_code: {:b}\nAddress that caused the fault: {:#?}\n{:#?}",
+           error_code.bits() as u32, registers::control_regs::cr2(), stack_frame);
 }
 
 /// Timer handler

@@ -46,14 +46,28 @@ SECTIONS {
 		*(.rodata .rodata.*)
 	}
 
+	.got ALIGN(4K) : AT(ADDR(.got) - KERNEL_BASE)
+	{
+		*(.got)
+	}
+
+	.got.plt ALIGN(4K) : AT(ADDR(.got.plt) - KERNEL_BASE)
+	{
+		*(.got.plt)
+	}
 	.data.rel.ro ALIGN(4K) : AT(ADDR(.data.rel.ro) - KERNEL_BASE)
 	{
 		*(.data.rel.ro.local*) *(.data.rel.ro .data.rel.ro.*)
 	}
 
+	.debug ALIGN(4K) : AT(ADDR(.debug) - KERNEL_BASE)
+	{
+		*(.debug)
+	}
 
-	/DISCARD/ : {
+
+	.gcc_except_table ALIGN(4K) : AT(ADDR(.gcc_except_table) - KERNEL_BASE)
+	{
 		*(.gcc_except_table)
-		*(.debug*)
 	}
 }
