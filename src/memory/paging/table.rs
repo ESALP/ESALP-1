@@ -88,6 +88,7 @@ impl<L> Table<L>
                 .expect("No frames availible :(");
             self.entries[index].set(frame, PRESENT | WRITABLE);
             self.next_table_mut(index).unwrap().zero();
+            assert!(self.next_table_mut(index).is_some());
         }
         self.next_table_mut(index).unwrap()
     }
