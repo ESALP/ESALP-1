@@ -101,9 +101,18 @@ pub extern "C" fn _Unwind_Resume() -> ! {
     unsafe { KEXIT() }
 }
 
+/// Used for unwinding, unsupported
 #[lang = "eh_personality"]
 #[no_mangle]
 pub extern "C" fn eh_personality() {}
+
+
+/// Runs when the allocator is out of memory
+#[lang = "oom"]
+fn oom() -> ! {
+    panic!("Error, out of memory");
+}
+
 /// Runs during a `panic!()`
 #[no_mangle]
 #[lang = "panic_fmt"]

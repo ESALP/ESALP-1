@@ -20,29 +20,23 @@ use memory::PAGE_SIZE;
 type BitmapEntry = usize;
 pub const EMPTY_ENTRY: BitmapEntry = 0;
 
-fn first_bit(entry: BitmapEntry) -> u8 {
-    for bit in 0..(size_of::<usize>() * 8) {
-        if entry & (1 << bit) != 0 {
-            return bit as u8;
-        }
-    }
-
-    unreachable!("first_bit called with empty entry")
+fn first_bit(entry: BitmapEntry) -> u32 {
+    return entry.trailing_zeros()
 }
 
 fn bitmap_place(frame: &Frame) -> (usize, BitmapEntry) {
-    let offset = frame.0 / (size_of::<usize>() * 8);
-    let bit = frame.0 - (offset * (size_of::<usize>() * 8));
+    let offset = frame.0 / (size_of::<BitmapEntry>() * 8);
+    let bit = frame.0 % (size_of::<BitmapEntry>() * 8);
     let entry = EMPTY_ENTRY | (1 << bit);
     (offset, entry)
 }
 
 fn get_frame(offset: usize, entry: &mut BitmapEntry) -> Frame {
-    let first_bit: usize = first_bit(*entry) as usize;
-    // Remove frame
-    *entry = *entry & (!first_bit);
+    let first_bit = first_bit(*entry) as usize;
+    // Remove frame from entry
+    *entry = *entry & (!(1 << first_bit));
 
-    Frame((offset * (size_of::<usize>() * 8)) | first_bit)
+    Frame((offset * (size_of::<FrameBitmap>() * 8)) + first_bit)
 }
 
 /// A bitmap allocator for physical frames
@@ -89,7 +83,7 @@ impl FrameBitmap {
             let (offset, entry) = bitmap_place(&frame);
 
             if offset >= bitmap.size {
-                bitmap.size = offset;
+                bitmap.size = offset+1;
             }
 
             unsafe {
@@ -104,13 +98,13 @@ impl FrameAllocate for FrameBitmap {
     fn allocate_frame(&mut self) -> Option<Frame> {
         let old_current = self.current;
         loop {
-            let mut entry = unsafe {
-                ::core::ptr::read(
-                    self.bottom.as_ptr().offset(self.current as isize)
-                )
+            // FIXME this is terrible, rewrite
+            let entry = unsafe {
+                    &mut*self.bottom.as_ptr().offset(self.current as isize)
             };
-            if entry != 0 {
-                return Some(get_frame(self.current, &mut entry));
+            if *entry != 0 {
+                let f = get_frame(self.current, entry);
+                return Some(f);
             }
 
             self.current += 1;

@@ -1,7 +1,11 @@
 file ./build/kernel-x86_64.bin
+# HACK weird gdb stuff
 target remote localhost:1234
 set architecture i386:x86-64
 set disassembly-flavor intel
+# Go to rust
+break rust_main
+c
 
 define longfix
     disconnect
@@ -14,7 +18,7 @@ define page_table
         echo Too many args\n
     end
 
-    set $addr = 18446743522877890560
+    set $addr = 0o177777_776_776_776_776_0000
     set $i = 0
     while $i < $argc
         eval "set $addr = ($addr * 512) + ($arg%d * 4096)", $i

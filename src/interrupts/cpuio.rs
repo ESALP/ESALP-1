@@ -25,8 +25,11 @@ extern "C" {
     fn outl(port: u16, value: u32);
 }
 
+/// A type implements `InOut` if it can be written to and read from a port
 pub trait InOut {
+    /// Read one `Self` from port
     unsafe fn port_in(port: u16) -> Self;
+    /// Write one `Self` from port
     unsafe fn port_out(port: u16, value: Self);
 }
 

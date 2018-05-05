@@ -11,29 +11,51 @@
 // These are taken from the OS Dev wiki,
 // not all of them are used. However they
 // will most likely be useful.
-const PIC1: u16 = 0x20;    /* IO base address for master PIC */
-const PIC2: u16 = 0xA0;    /* IO base address for slave PIC */
+/// IO base address for the master PIC
+const PIC1: u16 = 0x20;
+
+/// IO base address for the slave PIC
+const PIC2: u16 = 0xA0;
+
+/// IO address for commands sent to the master PIC
 const PIC1_COMMAND: u16 = PIC1;
+
+/// IO address for data sent to the master PIC
 const PIC1_DATA: u16 = (PIC1 + 1);
+
+/// IO address for commands sent to the slave PIC
 const PIC2_COMMAND: u16 = PIC2;
+
+/// IO address for data sent to the slave PIC
 const PIC2_DATA: u16 = (PIC2 + 1);
 
+/// Command used to start the PIC initialization sequence
+const ICW1_INIT: u8 = 0x10;
+
+/// PIC vector offset
 const ICW1_ICW4: u8 = 0x01;    /* ICW4 (not) needed */
+
+/// PIC Single (cascade) mode
 const ICW1_SINGLE: u8 = 0x02;    /* Single (cascade) mode */
 const ICW1_INTERVAL4: u8 = 0x04;    /* Call address interval 4 (8) */
 const ICW1_LEVEL: u8 = 0x08;    /* Level triggered (edge) mode */
-const ICW1_INIT: u8 = 0x10;    /* Initialization - required! */
 
-const ICW4_8086: u8 = 0x01;    /* 8086/88 (MCS-80/85) mode */
-const ICW4_AUTO: u8 = 0x02;    /* Auto (normal) EOI */
-const ICW4_BUF_SLAVE: u8 = 0x08;    /* Buffered mode/slave */
-const ICW4_BUF_MASTER: u8 = 0x0C;    /* Buffered mode/master */
+/// PIC 8086/88 (MCS-80/85) mode
+const ICW4_8086: u8 = 0x01;
+/// Auto (normal) End-of-Interrupt
+const ICW4_AUTO: u8 = 0x02;
+/// Slave PIC buffered mode
+const ICW4_BUF_SLAVE: u8 = 0x08;
+/// Master PIC buffered mode
+const ICW4_BUF_MASTER: u8 = 0x0C;
 const ICW4_SFNM: u8 = 0x10;    /* Special fully nested (not) */
 
-const PIC_EOI: u8 = 0x20;    /* End-of-Interrupt command code */
+/// PIC End-of-Interrupt command
+const PIC_EOI: u8 = 0x20;
 
 use interrupts::cpuio::{Port, UnsafePort};
 
+/// An abstraction of an 8086 Programmable Interrupt Controller
 pub struct PIC {
     offset: u8,
     command: UnsafePort<u8>,
@@ -61,8 +83,15 @@ impl PIC {
     }
 }
 
+/// Two chained `PIC`s
 pub struct ChainedPICs {
+    /// The master `PIC`
+    ///
+    /// Handles interrupt vectors `[offset1-offset1+7]`
     pub master: PIC,
+    /// The slave `PIC`
+    ///
+    /// Handles interrupt vectors `[offset2-offset2+7]`
     pub slave: PIC,
 }
 impl ChainedPICs {
