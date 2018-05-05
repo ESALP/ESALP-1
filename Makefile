@@ -17,11 +17,15 @@ module := src/arch/$(arch)/module
 
 linker_script := src/arch/$(arch)/linker.ld
 grub_cfg := src/arch/$(arch)/grub.cfg
+# We need this to find all rust files. GNU make doesn't support recursive
+# wildcards, so this function supplies it for us. (from SO)
+rwildcard=$(wildcard $1$2) $(foreach d,$(wildcard $1*),$(call rwildcard,$d/,$2))
+rust_source_files := $(call rwildcard,src/,*.rs)
 assembly_source_files := $(wildcard src/arch/$(arch)/*.asm)
 assembly_object_files := $(patsubst src/arch/$(arch)/%.asm, \
 	build/arch/$(arch)/%.o, $(assembly_source_files))
 
-.PHONY: all clean run iso
+.PHONY: all clean run iso debug
 
 all: $(kernel)
 
@@ -71,16 +75,19 @@ $(iso): $(kernel) build/arch/$(arch)/$(kbmap).bin $(grub_cfg)
 	@grub-mkrescue -o $(iso) build/isofiles 2> /dev/null
 	@rm -r build/isofiles
 	
-$(kernel): xargo $(rust_os) $(assembly_object_files) $(linker_script)
+# Rust image
+$(kernel): $(rust_os) $(assembly_object_files) $(linker_script)
 	@$(ld) -n --gc-sections -T $(linker_script) -o $(kernel) \
 		$(assembly_object_files) $(rust_os)
 
-xargo: export RUST_TARGET_PATH=$(shell pwd)
-xargo:
+# Rust static lib
+$(rust_os): export RUST_TARGET_PATH=$(shell pwd)
+$(rust_os): $(rust_source_files)
 	@xargo build --target $(target)
 
-build/arch/$(arch)/$(kbmap).bin: $(module)/keyboard/$(kbmap).asm
-	@nasm $(module)/keyboard/$(kbmap).asm -o build/arch/$(arch)/$(kbmap).bin
+# Keyboard maps
+build/arch/$(arch)/%.bin: $(module)/keyboard/%.asm
+	@nasm $< -o $@
 
 # compile assembly files
 build/arch/$(arch)/%.o: src/arch/$(arch)/%.asm
