@@ -46,11 +46,11 @@
 use spin::{Mutex, Once};
 
 use x86_64::VirtualAddress;
-use x86_64::registers;
-use x86_64::structures::idt::Idt;
-use x86_64::structures::idt::{ExceptionStackFrame, PageFaultErrorCode};
+use x86_64::registers::{self, flags};
 use x86_64::structures::tss::TaskStateSegment;
 
+use self::idt::Idt;
+use self::context::ExceptionStackFrame;
 use self::gdt::Gdt;
 
 use memory;
@@ -64,35 +64,51 @@ mod keyboard;
 mod pic;
 /// Abstraction of the Global Descriptor Table
 mod gdt;
+/// Abstraction of the Interrupt Descriptor Table
+mod idt;
+/// Interrupt context handling in Rust
+#[macro_use]
+mod context;
 
-extern "C" {
-    /// Enable interrupts
-    fn sti();
+/// Enable Interrupts
+#[inline]
+unsafe fn sti() {
+    asm!("sti");
 }
 
-lazy_static! {
-    /// This is the Interrupt Descriptor Table that contains handlers for all
-    /// interrupt vectors that we support. Each handler is set in its initialization
-    /// and is not modified again.
-    static ref IDT: Idt = {
-        let mut idt = Idt::new();
+/// Disable Interrupts
+#[inline]
+unsafe fn cli() {
+    asm!("cli");
+}
 
-        // Initialize handlers
-        idt.divide_by_zero.set_handler_fn(de_handler);
-        idt.breakpoint.set_handler_fn(breakpoint_handler);
-        unsafe {
-            // Use another stack to prevent triple faults
-            idt.double_fault.set_handler_fn(df_handler)
-                .set_stack_index(DF_TSS_INDEX as u16);
-        }
-        idt.general_protection_fault.set_handler_fn(gp_handler);
-        idt.page_fault.set_handler_fn(pf_handler);
-        // PIC handlers
-        idt[0x20].set_handler_fn(timer_handler);
-        idt[0x21].set_handler_fn(kb_handler);
+/// Run the internal function with interrupts disabled
+///
+/// # Safety
+/// One must not take any locks or do any other operations that must block
+/// within the closure.
+#[inline]
+pub unsafe fn run_no_int<F, O>(mut f: F) -> O
+    where F: FnMut() -> O
+{
+    let enable = flags::flags().contains(flags::Flags::IF);
+    cli();
+    let o = f();
+    if enable {
+        sti();
+    }
+    o
+}
 
-        idt
-    };
+/// This is the Interrupt Descriptor Table that contains handlers for all
+/// interrupt vectors that we support. Each handler is set in its initialization
+/// and is not modified again.
+///
+// FIXME make CPU local
+static IDT: Once<Idt> = Once::new();
+
+pub fn get_idt() -> &'static Idt {
+    IDT.try().unwrap()
 }
 
 /// The Rust interface to the 8086 Programmable Interrupt Controller
@@ -106,6 +122,28 @@ static TSS: Once<TaskStateSegment> = Once::new();
 static GDT: Once<Gdt> = Once::new();
 
 pub fn init() {
+    // Set up the IDT
+    IDT.call_once(|| {
+        let idt = Idt::new();
+
+        // Initialize handlers
+        idt.set_handler(0x0, handler!(de_handler));
+        idt.set_handler(0x3, handler!(breakpoint_handler));
+        unsafe {
+            // Use another stack to prevent triple faults
+            idt.set_handler(0x8, handler_error_code!(df_handler))
+                .set_stack_index(DF_TSS_INDEX as u16);
+        }
+        idt.set_handler(0xD, handler_error_code!(gp_handler));
+        idt.set_handler(0xE, handler_error_code!(pf_handler));
+        // PIC handlers
+        idt.set_handler(0x20, handler!(timer_handler));
+        idt.set_handler(0x21, handler!(kb_handler));
+
+        idt
+    });
+
+    // Set up the TSS
     let double_fault_stack = memory::alloc_stack(1)
         .expect("Could not allocate double fault stack");
 
@@ -116,7 +154,7 @@ pub fn init() {
         tss
     });
 
-    // Create a new GDT with a code segment and TSS segment and then load both
+    // Set up the GDT with a code segment and TSS segment and then load both
     // segments
     use x86_64::structures::gdt::SegmentSelector;
     use x86_64::instructions::segmentation::set_cs;
@@ -140,8 +178,9 @@ pub fn init() {
         load_tss(tss_selector);
     }
 
-    IDT.load();
+    // Set up the PIC and initialize interrupts.
     unsafe {
+        get_idt().load();
         {
             let mut pic = PIC.lock();
             pic.initialize();
@@ -153,14 +192,14 @@ pub fn init() {
 /// Divide by zero handler
 ///
 /// Occurs when the hardware attempts to divide by zero. Unrecoverable.
-extern "x86-interrupt" fn de_handler(stack_frame: &mut ExceptionStackFrame) {
+extern "C" fn de_handler(stack_frame: &ExceptionStackFrame) {
     panic!("EXCEPTION DIVIDE BY ZERO\n{:#?}", stack_frame);
 }
 
 /// Breakpoint handler
 ///
 /// A harmless interrupt, operation is safely resumed after printing a message.
-extern "x86-interrupt" fn breakpoint_handler(stack_frame: &mut ExceptionStackFrame) {
+extern "C" fn breakpoint_handler(stack_frame: &ExceptionStackFrame) {
     println!("Breakpoint at {:#?}\n{:#?}",
              (stack_frame).instruction_pointer,
              stack_frame);
@@ -184,7 +223,7 @@ extern "x86-interrupt" fn breakpoint_handler(stack_frame: &mut ExceptionStackFra
 ///                          | Stack-Segment Fault
 ///                          | General Protection Fault
 /// ------------------------ | ------------------------
-extern "x86-interrupt" fn df_handler(stack_frame: &mut ExceptionStackFrame, _: u64) {
+extern "C" fn df_handler(stack_frame: &ExceptionStackFrame, _: u64) {
     panic!("\nEXCEPTION: DOUBLE FAULT\n{:#?}", stack_frame)
 }
 
@@ -199,7 +238,7 @@ extern "x86-interrupt" fn df_handler(stack_frame: &mut ExceptionStackFrame, _: u
 ///
 /// *Error Code*: The General Protection Fault error code is the segment
 /// selector index when the exception is segment related, otherwise, 0.
-extern "x86-interrupt" fn gp_handler(stack_frame: &mut ExceptionStackFrame, error_code: u64) {
+extern "C" fn gp_handler(stack_frame: &ExceptionStackFrame, error_code: u64) {
     panic!("EXCEPTION GENERAL PROTECTION FAULT\nerror_code: {}\n{:#?}\n", error_code, stack_frame);
 }
 
@@ -211,13 +250,13 @@ extern "x86-interrupt" fn gp_handler(stack_frame: &mut ExceptionStackFrame, erro
 /// non-executable page.
 /// + A protection check (privileges, read/write) failed.
 /// + A reserved bit in the page directory or table entries is set to 1.
-extern "x86-interrupt" fn pf_handler(stack_frame: &mut ExceptionStackFrame, error_code: PageFaultErrorCode) {
+extern "C" fn pf_handler(stack_frame: &ExceptionStackFrame, error_code: u64) {
     panic!("EXCEPTION PAGE FAULT\nerror_code: {:b}\nAddress that caused the fault: {:#?}\n{:#?}",
-           error_code.bits() as u32, registers::control_regs::cr2(), stack_frame);
+           error_code, registers::control_regs::cr2(), stack_frame);
 }
 
 /// Timer handler
-extern "x86-interrupt" fn timer_handler(_: &mut ExceptionStackFrame) {
+extern "C" fn timer_handler(_: &ExceptionStackFrame) {
     unsafe {
         PIC.lock().master.end_of_interrupt();
     }
@@ -227,7 +266,7 @@ extern "x86-interrupt" fn timer_handler(_: &mut ExceptionStackFrame) {
 ///
 /// This function pages the `Keyboard` port to get the key that was pressed, it then
 /// prints the associated byte to the screen and saves the state of the keyboard.
-extern "x86-interrupt" fn kb_handler(_: &mut ExceptionStackFrame) {
+extern "C" fn kb_handler(_: &ExceptionStackFrame) {
     let mut kb = KEYBOARD.lock();
     match kb.port.read() {
         // If the key was just pressed,
