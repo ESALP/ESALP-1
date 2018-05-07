@@ -67,27 +67,44 @@ impl FrameBitmap {
         };
         let bitmap_addr = bitmap.bottom.as_ptr() as VirtualAddress;
 
-        let bitmap_page = Page::containing_address(bitmap_addr);
+        let mut curr_page = Page::containing_address(bitmap_addr);
 
-        // Map and zero the bitmap page
-        page_table.map(bitmap_page,
+        // Map and zero the page
+        page_table.map(curr_page,
                        paging::WRITABLE,
                        &mut allocator);
         unsafe {
-            rlibc::memset(bitmap.bottom.as_ptr() as *mut u8,
+            rlibc::memset(curr_page.start_address() as *mut u8,
                           0,
                           PAGE_SIZE);
         }
 
         while let Some(frame) = allocator.allocate_frame() {
+
             let (offset, entry) = bitmap_place(&frame);
+            let addr = unsafe {
+                bitmap.bottom.as_ptr().offset(offset as isize)
+            };
 
             if offset >= bitmap.size {
                 bitmap.size = offset+1;
+                let p = Page::containing_address(addr as usize);
+                if p != curr_page {
+                    curr_page = p;
+                    // Map and zero the page
+                    page_table.map(curr_page,
+                                   paging::WRITABLE,
+                                   &mut allocator);
+                    unsafe {
+                        rlibc::memset(curr_page.start_address() as *mut u8,
+                                      0,
+                                      PAGE_SIZE);
+                    }
+                }
             }
 
             unsafe {
-                *bitmap.bottom.as_ptr().offset(offset as isize) |= entry;
+                *addr |= entry;
             }
         }
         bitmap
