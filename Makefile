@@ -60,7 +60,7 @@ endif
 ld := $(binutils_prefix)ld
 
 run: $(iso)
-	@qemu-system-x86_64 $(qflags) -cdrom $(iso)
+	@qemu-system-x86_64 $(qflags) -cdrom $(iso) -serial stdio
 
 debug: $(iso)
 	@qemu-system-x86_64 $(qflags) -cdrom $(iso) -S

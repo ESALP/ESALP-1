@@ -53,7 +53,7 @@ const ICW4_SFNM: u8 = 0x10;    /* Special fully nested (not) */
 /// PIC End-of-Interrupt command
 const PIC_EOI: u8 = 0x20;
 
-use interrupts::cpuio::{Port, UnsafePort};
+use cpuio::port::{Port, UnsafePort};
 
 /// An abstraction of an 8086 Programmable Interrupt Controller
 pub struct PIC {

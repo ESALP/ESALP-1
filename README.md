@@ -18,6 +18,7 @@ Current features:
   + Can print to the VGA text buffer (in 255 different colors!)
   + Simple PS/2 keyboard driver
     + with multiple keyboard maps
+  + Can print to the serial bus
 + Memory
   + Simple paging
     + With physical frame allocation _and_ deallocation

@@ -8,7 +8,7 @@
 // except according to those terms.
 
 use spin::Mutex;
-use interrupts::cpuio::Port;
+use cpuio::port::Port;
 
 /// A struct that represents an interface to the PS/2 keyboard
 pub struct Keyboard {

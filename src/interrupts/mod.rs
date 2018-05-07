@@ -60,8 +60,6 @@ pub use self::keyboard::KEYBOARD;
 
 /// Abstraction of the PS/2 keyboard
 mod keyboard;
-/// IO abstractions in Rust
-mod cpuio;
 /// The programmable interrupt controller
 mod pic;
 /// Abstraction of the Global Descriptor Table

@@ -52,6 +52,8 @@ mod memory;
 /// Interrupts code
 // This must be pub to expose functions to the linker
 pub mod interrupts;
+/// IO abstractions in Rust
+mod cpuio;
 
 extern "C" {
     /// The kernel exit point. It disables interrupts, enters an infinite loop,
@@ -85,6 +87,9 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) -> ! {
 
     // Initialize the IDT
     interrupts::init();
+
+    // Initialize the serial port
+    cpuio::init();
 
     println!("Try to write some things!");
     vga_buffer::change_color(vga_buffer::Color::White, vga_buffer::Color::Black);

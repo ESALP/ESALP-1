@@ -7,6 +7,8 @@
 // This file may not be copied, modified, or distributed
 // except according to those terms.
 
+//! Reading and writing to CPU ports in Rust
+
 #![allow(dead_code)]
 use core::marker::PhantomData;
 
