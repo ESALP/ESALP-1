@@ -101,6 +101,19 @@ impl Mapper {
         p1[page.p1_index()].set(frame, flags | PRESENT);
     }
 
+    /// Same as map_to, but fails silently if the page cannot be mapped
+    pub fn try_map_to<A>(&mut self, page: Page, frame: Frame, flags: EntryFlags, allocator: &mut A)
+        where A: FrameAllocate
+    {
+        let p3 = self.p4_mut().next_table_create(page.p4_index(), allocator);
+        let p2 = p3.next_table_create(page.p3_index(), allocator);
+        let p1 = p2.next_table_create(page.p2_index(), allocator);
+
+        if p1[page.p1_index()].is_unused() {
+            p1[page.p1_index()].set(frame, flags | PRESENT);
+        }
+    }
+
     /// Maps the page to some free frame with the provided flags.
     /// The free frame is allocated with the given allocator
     pub fn map<A>(&mut self, page: Page, flags: EntryFlags, allocator: &mut A)

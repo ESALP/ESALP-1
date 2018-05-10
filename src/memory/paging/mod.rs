@@ -363,7 +363,9 @@ pub fn remap_the_kernel<FA>(active_table: &mut ActivePageTable,
 
         for frame in Frame::range_inclusive(multiboot_start, multiboot_end) {
             let new_page = Page::containing_address(frame.start_address() + KERNEL_BASE);
-            mapper.map_to(new_page, frame, PRESENT, &mut allocator);
+            // if we have already mapped this page, it must have been
+            // already mapped when we mapped the elf sections.
+            mapper.try_map_to(new_page, frame, PRESENT, &mut allocator);
         }
     });
     let old_table = active_table.switch(new_table);
