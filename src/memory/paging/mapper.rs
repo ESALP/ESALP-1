@@ -90,27 +90,19 @@ impl Mapper {
     /// Maps the page to the frame with the provided flags
     /// The `PRESENT` flag is set by default. Needs an allocator as it might
     /// need to create new page tables
-    pub fn map_to<A>(&mut self, page: Page, frame: Frame, flags: EntryFlags, allocator: &mut A)
+    pub fn map_to<A>(&mut self, page: Page, frame: Frame, flags: EntryFlags, allocator: &mut A) -> Result<(),Frame>
         where A: FrameAllocate
     {
         let p3 = self.p4_mut().next_table_create(page.p4_index(), allocator);
         let p2 = p3.next_table_create(page.p3_index(), allocator);
         let p1 = p2.next_table_create(page.p2_index(), allocator);
 
-        assert!(p1[page.p1_index()].is_unused());
-        p1[page.p1_index()].set(frame, flags | PRESENT);
-    }
-
-    /// Same as map_to, but fails silently if the page cannot be mapped
-    pub fn try_map_to<A>(&mut self, page: Page, frame: Frame, flags: EntryFlags, allocator: &mut A)
-        where A: FrameAllocate
-    {
-        let p3 = self.p4_mut().next_table_create(page.p4_index(), allocator);
-        let p2 = p3.next_table_create(page.p3_index(), allocator);
-        let p1 = p2.next_table_create(page.p2_index(), allocator);
-
+        //assert!(p1[page.p1_index()].is_unused());
         if p1[page.p1_index()].is_unused() {
             p1[page.p1_index()].set(frame, flags | PRESENT);
+            Ok(())
+        } else {
+            Err(p1[page.p1_index()].pointed_frame().unwrap())
         }
     }
 
@@ -121,7 +113,7 @@ impl Mapper {
     {
         let frame = allocator.allocate_frame()
             .expect("Out of Memory :(");
-        self.map_to(page, frame, flags, allocator)
+        self.map_to(page, frame, flags, allocator).expect("Newly allocated frame is not free");
     }
 
     /// Identity map the given frame with the provided Flags.
@@ -130,7 +122,7 @@ impl Mapper {
         where A: FrameAllocate
     {
         let page = Page::containing_address(frame.start_address());
-        self.map_to(page, frame, flags, allocator)
+        self.map_to(page, frame, flags, allocator).expect("Page containing address to be identity mapped is taken");
     }
 
     /// Unmaps the given page and adds all freed frames to the

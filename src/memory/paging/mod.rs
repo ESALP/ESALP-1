@@ -120,7 +120,7 @@ impl Page {
             ref mut frame_allocator,
             stack_allocator: _,
         } = lock.as_mut().unwrap();
-        active_table.map_to(self, frame, flags, frame_allocator);
+        active_table.map_to(self, frame, flags, frame_allocator).expect("Unable to map frame because page is already taken");
     }
 
     /// Map this `Page` to any availible `Frame`.
@@ -349,7 +349,7 @@ pub fn remap_the_kernel<FA>(active_table: &mut ActivePageTable,
 
             for frame in Frame::range_inclusive(start_frame, end_frame) {
                 let new_page = Page::containing_address(frame.start_address() + KERNEL_BASE);
-                mapper.map_to(new_page, frame, flags, &mut allocator);
+                mapper.map_to(new_page, frame, flags, &mut allocator).expect("Unable to map elf section frame");
             }
         }
 
@@ -365,7 +365,7 @@ pub fn remap_the_kernel<FA>(active_table: &mut ActivePageTable,
             let new_page = Page::containing_address(frame.start_address() + KERNEL_BASE);
             // if we have already mapped this page, it must have been
             // already mapped when we mapped the elf sections.
-            mapper.try_map_to(new_page, frame, PRESENT, &mut allocator);
+            let _ = mapper.map_to(new_page, frame, PRESENT, &mut allocator);
         }
     });
     let old_table = active_table.switch(new_table);
