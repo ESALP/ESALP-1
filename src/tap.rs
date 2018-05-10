@@ -20,18 +20,18 @@ impl TAPTestGroup {
     }
 
     pub fn plan(&self) {
-        println!("0..{}", self.count);
+        serial_println!("0..{}", self.count);
     }
 
     pub fn ok(&self, message: Option<&str>) {
         match message {
-            Some(s) => println!("ok {}\n", s),
-            None => println!("ok \n"),
+            Some(s) => serial_println!("ok {}\n", s),
+            None => serial_println!("ok \n"),
         };
     }
 
     pub fn not_ok(&self, message: &str) {
-        println!("not ok {}", message);
+        serial_println!("not ok {}", message);
     }
 
     pub fn assert_tap(&self, cond: bool, message: &str) {

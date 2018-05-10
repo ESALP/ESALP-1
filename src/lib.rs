@@ -53,6 +53,7 @@ mod memory;
 // This must be pub to expose functions to the linker
 pub mod interrupts;
 /// IO abstractions in Rust
+#[macro_use]
 mod cpuio;
 /// Testing
 mod tap;
