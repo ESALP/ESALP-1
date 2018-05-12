@@ -397,6 +397,8 @@ pub mod tests {
     {
         let tap = TAPTestGroup::new(9);
     
+        tap.plan();
+
         let mut lock = MEMORY_CONTROLLER.lock();
         let &mut MemoryController {
             ref mut active_table,
@@ -430,8 +432,8 @@ pub mod tests {
             .expect("No more frames :(");
         tap.assert_tap(active_table.mapper.translate(addr).is_none(),
                  "Test page (12th P3), was unexpecteldly already mapped");
-        active_table.map_to(page, frame, EntryFlags::empty(), frame_allocator);
-        tap.assert_tap(active_table.mapper.translate(addr).is_some(), 
+        let res = active_table.map_to(page, frame, EntryFlags::empty(), frame_allocator);
+        tap.assert_tap(res.is_ok(),
                        "Unable to successfully use map_to() to map 12th P3 entry");
         //println!("Next free frame: {:?}", frame_allocator.allocate_frame());
     

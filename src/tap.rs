@@ -25,8 +25,8 @@ impl TAPTestGroup {
 
     pub fn ok(&self, message: Option<&str>) {
         match message {
-            Some(s) => serial_println!("ok {}\n", s),
-            None => serial_println!("ok \n"),
+            Some(s) => serial_println!("ok {}", s),
+            None => serial_println!("ok "),
         };
     }
 
