@@ -7,13 +7,17 @@
 // This file may not be copied, modified, or distributed
 // except according to those terms
 
+use spin::Mutex;
+
 pub struct TAPTestGroup {
     pub count: u8,
 }
 
+pub static GLOBAL_TEST_GROUP: Mutex<TAPTestGroup> = Mutex::new(TAPTestGroup::new());
+
 impl TAPTestGroup {
 
-    pub fn new() -> TAPTestGroup {
+    pub const fn new() -> TAPTestGroup {
         TAPTestGroup {
             count: 0,
         }

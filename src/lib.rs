@@ -109,6 +109,10 @@ pub fn run_tests() {
     //vga_buffer::run_tests();
     memory::tests::run_tests();
     //interrupts::run_tests();
+    use core::ops::Deref;
+    let lock = tap::GLOBAL_TEST_GROUP.lock();
+    let tap = lock.deref();
+    tap.plan();
 }
 
 #[allow(non_snake_case)]
