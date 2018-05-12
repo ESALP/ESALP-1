@@ -13,9 +13,9 @@ pub struct TAPTestGroup {
 
 impl TAPTestGroup {
 
-    pub fn new(c: u8) -> TAPTestGroup {
+    pub fn new() -> TAPTestGroup {
         TAPTestGroup {
-            count: c,
+            count: 0,
         }
     }
 
@@ -23,18 +23,20 @@ impl TAPTestGroup {
         serial_println!("0..{}", self.count);
     }
 
-    pub fn ok(&self, message: Option<&str>) {
+    pub fn ok(&mut self, message: Option<&str>) {
         match message {
-            Some(s) => serial_println!("ok {}", s),
-            None => serial_println!("ok "),
+            Some(s) => serial_println!("ok {} - {}", self.count, s),
+            None => serial_println!("ok {}", self.count),
         };
+        self.count += 1;
     }
 
-    pub fn not_ok(&self, message: &str) {
-        serial_println!("not ok {}", message);
+    pub fn not_ok(&mut self, message: &str) {
+        serial_println!("not ok {} - {}", self.count, message);
+        self.count += 1;
     }
 
-    pub fn assert_tap(&self, cond: bool, message: &str) {
+    pub fn assert_tap(&mut self, cond: bool, message: &str) {
         if cond {
             self.ok(None);
         } else {

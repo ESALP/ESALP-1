@@ -395,9 +395,8 @@ pub mod tests {
 
     pub fn test_paging()
     {
-        let tap = TAPTestGroup::new(9);
+        let mut tap = TAPTestGroup::new();
     
-        tap.plan();
 
         let mut lock = MEMORY_CONTROLLER.lock();
         let &mut MemoryController {
@@ -441,6 +440,7 @@ pub mod tests {
         active_table.unmap(Page::containing_address(addr), frame_allocator);
         tap.assert_tap(active_table.mapper.translate(addr).is_none(), 
                        "Did non successfully unmap test page (12th P3)");
+        tap.plan();
     }
 
 }

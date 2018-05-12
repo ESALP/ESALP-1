@@ -213,11 +213,11 @@ pub mod tests {
     fn test_memory_alloc() {
         use alloc::boxed::Box;
         
-        let test_group = TAPTestGroup::new(1);
-        test_group.plan();
+        let mut test_group = TAPTestGroup::new();
         
         //let mut heap_test = Box::new(42); // this line causing page fault
         test_group.ok(None);
         //test_group.assert_tap(*heap_test == 42, "Pointer allocation failed");
+        test_group.plan();
     }
 }
