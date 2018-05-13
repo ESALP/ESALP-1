@@ -64,7 +64,7 @@ impl<L> Table<L>
     /// Returns the address of the table at index `index`
     fn next_table_address(&self, index: usize) -> Option<VirtualAddress> {
         let entry_flags = self[index].flags();
-        if entry_flags.contains(PRESENT) && !entry_flags.contains(HUGE_PAGE) {
+        if entry_flags.contains(EntryFlags::PRESENT) && !entry_flags.contains(EntryFlags::HUGE_PAGE) {
             let table_address = self as *const _ as usize;
             // Or 0xffff << 48 to ensure a canonical address
             Some((0xffff << 48) | (table_address << 9) | (index << 12))
@@ -82,11 +82,11 @@ impl<L> Table<L>
         where A: FrameAllocate
     {
         if self.next_table(index).is_none() {
-            assert!(!self.entries[index].flags().contains(HUGE_PAGE),
+            assert!(!self.entries[index].flags().contains(EntryFlags::HUGE_PAGE),
                     "Mapping code does not support huge pages");
             let frame = allocator.allocate_frame()
                 .expect("No frames availible :(");
-            self.entries[index].set(frame, PRESENT | WRITABLE);
+            self.entries[index].set(frame, EntryFlags::PRESENT | EntryFlags::WRITABLE);
             self.next_table_mut(index).unwrap().zero();
             assert!(self.next_table_mut(index).is_some());
         }

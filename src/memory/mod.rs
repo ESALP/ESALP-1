@@ -133,7 +133,7 @@ pub fn init(boot_info: &BootInformation) {
     use hole_list_allocator;
 
     for page in Page::range_inclusive(heap_start_page, heap_end_page) {
-        page.map(paging::WRITABLE);
+        page.map(paging::EntryFlags::WRITABLE);
     }
 
     unsafe {

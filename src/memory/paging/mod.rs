@@ -235,14 +235,14 @@ impl ActivePageTable {
             let p4_table = temporary_page.map_table_frame(backup.clone(), self);
 
             // Overwrite recursive mapping
-            self.p4_mut()[510].set(table.p4_frame.clone(), PRESENT | WRITABLE);
+            self.p4_mut()[510].set(table.p4_frame.clone(), EntryFlags::PRESENT | EntryFlags::WRITABLE);
             tlb::flush_all();
 
             // Execute the closure in the new context
             f(self);
 
             // Restore recursive mapping
-            p4_table[510].set(backup, PRESENT | WRITABLE);
+            p4_table[510].set(backup, EntryFlags::PRESENT | EntryFlags::WRITABLE);
             tlb::flush_all();
         }
 
@@ -286,7 +286,7 @@ impl InactivePageTable {
             // Now that it's mapped we can zero it
             table.zero();
             // Now set up recursive mapping for the table
-            table[510].set(frame.clone(), PRESENT | WRITABLE);
+            table[510].set(frame.clone(), EntryFlags::PRESENT | EntryFlags::WRITABLE);
         }
 
         temporary_page.unmap(active_table);
@@ -355,7 +355,7 @@ pub fn remap_the_kernel<FA>(active_table: &mut ActivePageTable,
 
         // Identity map the VGA buffer
         let vga_buffer = Frame::containing_address(0xb8000);
-        mapper.identity_map(vga_buffer, WRITABLE, &mut allocator);
+        mapper.identity_map(vga_buffer, EntryFlags::WRITABLE, &mut allocator);
 
         // Map the multiboot info structure to the higher half
         let multiboot_start = Frame::containing_address(boot_info.start_address() - KERNEL_BASE);
@@ -365,7 +365,7 @@ pub fn remap_the_kernel<FA>(active_table: &mut ActivePageTable,
             let new_page = Page::containing_address(frame.start_address() + KERNEL_BASE);
             // if we have already mapped this page, it must have been
             // already mapped when we mapped the elf sections.
-            let _ = mapper.map_to(new_page, frame, PRESENT, &mut allocator);
+            let _ = mapper.map_to(new_page, frame, EntryFlags::PRESENT, &mut allocator);
         }
     });
     let old_table = active_table.switch(new_table);

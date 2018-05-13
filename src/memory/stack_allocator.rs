@@ -68,7 +68,7 @@ impl StackAllocator {
 
                 // Map to physical pages
                 for page in Page::range_inclusive(start, end) {
-                    active_table.map(page, paging::WRITABLE, allocator);
+                    active_table.map(page, paging::EntryFlags::WRITABLE, allocator);
                 }
 
                 // Create stack and return

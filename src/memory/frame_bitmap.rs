@@ -71,7 +71,7 @@ impl FrameBitmap {
 
         // Map and zero the page
         page_table.map(curr_page,
-                       paging::WRITABLE,
+                       paging::EntryFlags::WRITABLE,
                        &mut allocator);
         unsafe {
             rlibc::memset(curr_page.start_address() as *mut u8,
@@ -93,7 +93,7 @@ impl FrameBitmap {
                     curr_page = p;
                     // Map and zero the page
                     page_table.map(curr_page,
-                                   paging::WRITABLE,
+                                   paging::EntryFlags::WRITABLE,
                                    &mut allocator);
                     unsafe {
                         rlibc::memset(curr_page.start_address() as *mut u8,

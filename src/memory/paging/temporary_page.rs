@@ -7,7 +7,7 @@
 // This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use super::{Page, ActivePageTable, VirtualAddress};
+use super::{Page, ActivePageTable, VirtualAddress, EntryFlags};
 use super::table::{Table, Level1};
 use memory::{Frame, FrameAllocate, FrameDeallocate};
 
@@ -38,9 +38,8 @@ impl TemporaryPage {
     /// Maps the temporary page to the given frame in the active page table.
     /// Returns the start address of the temporary page.
     pub fn map(&mut self, frame: Frame, active_table: &mut ActivePageTable) -> VirtualAddress {
-        use super::entry::WRITABLE;
-
-        active_table.map_to(self.page, frame, WRITABLE, &mut self.allocator).expect("Temporary page is already mapped");
+        active_table.map_to(self.page, frame, EntryFlags::WRITABLE, &mut self.allocator)
+            .expect("Temporary page is already mapped");
         self.page.start_address()
     }
 

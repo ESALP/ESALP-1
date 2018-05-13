@@ -17,36 +17,29 @@ pub const COM3: u16 = 0x3E8;
 pub const COM4: u16 = 0x2e8;
 
 bitflags! {
-    flags LineControl: u8 {
-        const LENB1 = 1 << 0,
-        const LENB2 = 1 << 1,
-        const LEN5 = 0,
-        const LEN6 = LENB1.bits,
-        const LEN7 = LENB2.bits,
-        const LEN8 = LENB1.bits | LENB2.bits,
+    struct LineControl: u8 {
+        const LENB1 = 1 << 0;
+        const LENB2 = 1 << 1;
+        const LEN5 = 0;
 
-        const STOP1 = 0 << 2,
-        const STOP2 = 1 << 2,
+        const STOP = 1 << 2;
 
-        const PARITYB1 = 1 << 3,
-        const PARITYB2 = 1 << 4,
-        const PARITYB3 = 1 << 5,
-        const PARITY_NONE = 0,
-        const PARITY_ODD = PARITYB1.bits,
-        const PARITY_EVEN = PARITYB1.bits | PARITYB2.bits,
-        const PARITY_MARK = PARITYB1.bits | PARITYB3.bits,
-        const PARITY_SPACE = PARITYB1.bits | PARITYB2.bits |
-            PARITYB3.bits,
+        const RATE = Self::LENB1.bits | Self::LENB2.bits;
 
-        const DLAB_ENABLE = 1 << 7,
+        const PARITYB1 = 1 << 3;
+        const PARITYB2 = 1 << 4;
+        const PARITYB3 = 1 << 5;
+
+        const DLAB_ENABLE = 1 << 7;
     }
 }
+
 bitflags! {
-    flags InterruptEnable: u8 {
-        const DATA_AVAILABLE = 1 << 0,
-        const TRANSMITTER_EMPTY = 1 << 1,
-        const BREAK_ERROR = 1 << 2,
-        const STATUS_CHANGE = 1 << 3,
+    struct InterruptEnable: u8 {
+        const DATA_AVAILABLE = 1 << 0;
+        const TRANSMITTER_EMPTY = 1 << 1;
+        const BREAK_ERROR = 1 << 2;
+        const STATUS_CHANGE = 1 << 3;
     }
 }
 
@@ -78,10 +71,10 @@ impl Serial {
     /// 3. Why? It's how the osdev wiki does it.
     pub fn init(&mut self) {
         self.interrupt_enable.write(0); // disable all interrupts
-        self.line_ctrl.write(DLAB_ENABLE.bits); // Enable DLAB
+        self.line_ctrl.write(LineControl::DLAB_ENABLE.bits); // Enable DLAB
         self.data.write(0x03); // Set divisor of 3, 38400 baud
         self.interrupt_enable.write(0x00); // high bit
-        self.line_ctrl.write((LEN8 | STOP1 | PARITY_NONE).bits);
+        self.line_ctrl.write(LineControl::RATE.bits);
         self.fifo.write(0xC7);
         self.modem_ctrl.write(0xB);
 

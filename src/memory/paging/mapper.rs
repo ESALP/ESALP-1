@@ -50,8 +50,6 @@ impl Mapper {
     /// Translates a virtual page to the corresponding physical frame. Returns
     /// `None` if the address is not mapped.
     pub fn translate_page(&self, page: Page) -> Option<Frame> {
-        use super::entry::HUGE_PAGE;
-
         let p3 = self.p4().next_table(page.p4_index());
 
         let huge_page = || {
@@ -59,7 +57,7 @@ impl Mapper {
                 let p3_entry = &p3[page.p3_index()];
                 // 1GiB page?
                 if let Some(start_frame) = p3_entry.pointed_frame() {
-                    if p3_entry.flags().contains(HUGE_PAGE) {
+                    if p3_entry.flags().contains(EntryFlags::HUGE_PAGE) {
                         // address must be 1GiB aligned
                         assert!(start_frame.0 % (ENTRY_COUNT * ENTRY_COUNT) == 0);
                         return Some(Frame(start_frame.0 + page.p2_index() * ENTRY_COUNT +
@@ -70,7 +68,7 @@ impl Mapper {
                     let p2_entry = &p2[page.p2_index()];
                     // 2MiB page?
                     if let Some(start_frame) = p2_entry.pointed_frame() {
-                        if p2_entry.flags().contains(HUGE_PAGE) {
+                        if p2_entry.flags().contains(EntryFlags::HUGE_PAGE) {
                             // address must be 2MiB aligned
                             assert!(start_frame.0 % ENTRY_COUNT == 0);
                             return Some(Frame(start_frame.0 + page.p1_index()));
@@ -99,7 +97,7 @@ impl Mapper {
 
         //assert!(p1[page.p1_index()].is_unused());
         if p1[page.p1_index()].is_unused() {
-            p1[page.p1_index()].set(frame, flags | PRESENT);
+            p1[page.p1_index()].set(frame, flags | EntryFlags::PRESENT);
             Ok(())
         } else {
             Err(p1[page.p1_index()].pointed_frame().unwrap())
