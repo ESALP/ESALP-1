@@ -49,15 +49,28 @@ impl Entry {
 bitflags! {
     /// Flags that are used in the entry.
     pub struct EntryFlags: u64 {
+        /// Page exists in the table
         const PRESENT =         1 << 0;
+        /// If set, R/W, else read-only
         const WRITABLE =        1 << 1;
+        /// If set, accessible by all rings
         const USER_ACCESSIBLE = 1 << 2;
+        /// If set, writes will go straight to ram rather than cache
+        /// (this is useful for memory-mapped hardware)
         const WRITE_THROUGH =   1 << 3;
+        /// Altogether disable caching
         const CACHE_DISABLED =  1 << 4;
+        /// Set if the page is read or written
+        /// (not cleared by hardware)
         const ACCESSED =        1 << 5;
+        /// Set if page is written to
         const DIRTY =           1 << 6;
+        /// If set, pages are 4MiB large. Otherwise they are 4KiB large
         const HUGE_PAGE =       1 << 7;
+        /// Prevent the CPU from updating this page on a CR3 change.
+        /// (use for kernel pages)
         const GLOBAL =          1 << 8;
+        /// If set, fault on execution of the page
         const NO_EXECUTE =      1 << 63;
     }
 }
