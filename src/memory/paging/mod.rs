@@ -396,7 +396,7 @@ pub mod tests {
 
     pub fn test_paging()
     {
-    
+
         use core::ops::DerefMut;
         let mut tap_lock = GLOBAL_TEST_GROUP.lock();
         let tap = tap_lock.deref_mut();
@@ -407,26 +407,26 @@ pub mod tests {
             ref mut frame_allocator,
             stack_allocator: _,
         } = lock.as_mut().unwrap();
-        
+
         // Address 0 is mapped
-        tap.assert_tap(active_table.mapper.translate(0).is_some(), 
+        tap.assert_tap(active_table.mapper.translate(0).is_some(),
                        "Address 0 not mapped");
         // Second P1 entry
-        tap.assert_tap(active_table.mapper.translate(4096).is_some(), 
+        tap.assert_tap(active_table.mapper.translate(4096).is_some(),
                        "Failed to translate second P1 entry");
         // Second P2 entry
-        tap.assert_tap(active_table.mapper.translate(4096 * 512).is_some(), 
+        tap.assert_tap(active_table.mapper.translate(4096 * 512).is_some(),
                        "Failed to translate second P2 entry");
         // 300th P2 entry
-        tap.assert_tap(active_table.mapper.translate(4096 * 512 * 300).is_some(), 
+        tap.assert_tap(active_table.mapper.translate(4096 * 512 * 300).is_some(),
                        "Failed to translate 300th P2 entry");
         // Second P3 entry
-        tap.assert_tap(active_table.mapper.translate(4096 * 512 * 512).is_none(), 
+        tap.assert_tap(active_table.mapper.translate(4096 * 512 * 512).is_none(),
                        "Should not have been able to translate second P3 entry");
         // Last entry
-        tap.assert_tap(active_table.mapper.translate(4096 * 512 * 512 - 1).is_some(), 
+        tap.assert_tap(active_table.mapper.translate(4096 * 512 * 512 - 1).is_some(),
                        "Failed to translate last entry");
-    
+
         // Test map_to
         let addr = 4096 * 512 * 512 * 12; // 12th p3 entry
         let page = Page::containing_address(addr);
@@ -437,8 +437,7 @@ pub mod tests {
         let res = active_table.map_to(page, frame, EntryFlags::empty(), frame_allocator);
         tap.assert_tap(res.is_ok(),
                        "Unable to successfully use map_to() to map 12th P3 entry");
-        //println!("Next free frame: {:?}", frame_allocator.allocate_frame());
-    
+
         // Test unmap
         active_table.unmap(Page::containing_address(addr), frame_allocator);
         tap.assert_tap(active_table.mapper.translate(addr).is_none(), 

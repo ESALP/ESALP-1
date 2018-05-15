@@ -100,6 +100,10 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) -> ! {
 
     #[cfg(feature = "test")] {
         run_tests();
+        // Shut down qemu
+        use cpuio::port::Port;
+        let mut p: Port<u8> = unsafe { Port::new(0xf4) };
+        p.write(0x00);
     }
 
     loop {

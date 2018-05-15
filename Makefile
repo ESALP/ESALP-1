@@ -25,7 +25,7 @@ assembly_source_files := $(wildcard src/arch/$(arch)/*.asm)
 assembly_object_files := $(patsubst src/arch/$(arch)/%.asm, \
 	build/arch/$(arch)/%.o, $(assembly_source_files))
 
-.PHONY: all clean run iso debug
+.PHONY: all clean run iso debug test
 
 all: $(kernel)
 
@@ -33,7 +33,9 @@ clean:
 	@xargo clean
 	@rm -r build
 
-qflags := -s
+qflags := -s -serial stdio
+
+cargo_flags :=
 
 ifeq ($(int),yes)
 	qflags += -d int
@@ -60,10 +62,15 @@ endif
 ld := $(binutils_prefix)ld
 
 run: $(iso)
-	@qemu-system-x86_64 $(qflags) -cdrom $(iso) -serial stdio
+	@qemu-system-x86_64 $(qflags) -cdrom $(iso)
 
 debug: $(iso)
 	@qemu-system-x86_64 $(qflags) -cdrom $(iso) -S
+
+test: cargo_flags += --features test
+test: $(iso)
+	@qemu-system-x86_64 $(qflags) -cdrom $(iso) -display none \
+		-device isa-debug-exit,iobase=0xf4,iosize=0x04
 
 iso: $(iso)
 
@@ -83,7 +90,7 @@ $(kernel): $(rust_os) $(assembly_object_files) $(linker_script)
 # Rust static lib
 $(rust_os): export RUST_TARGET_PATH=$(shell pwd)
 $(rust_os): $(rust_source_files)
-	@xargo build --target $(target) --features test
+	@xargo build --target $(target) $(cargo_flags)
 
 # Keyboard maps
 build/arch/$(arch)/%.bin: $(module)/keyboard/%.asm

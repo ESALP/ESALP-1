@@ -104,7 +104,6 @@ impl Serial {
     pub fn write(&mut self, a: u8) {
         while !self.is_transmit_empty() {}
 
-        print!("{}", a as char);
         self.data.write(a);
     }
 }

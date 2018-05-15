@@ -207,11 +207,11 @@ pub mod tests {
         test_memory_alloc();
         super::paging::tests::test_paging();
     }
-    
+
     fn test_memory_alloc() {
         use alloc::boxed::Box;
-        use ::tap::GLOBAL_TEST_GROUP; 
-        
+        use ::tap::GLOBAL_TEST_GROUP;
+
         use core::ops::DerefMut;
         let mut lock = GLOBAL_TEST_GROUP.lock();
         let test_group = lock.deref_mut();
