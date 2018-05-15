@@ -199,7 +199,7 @@ pub trait FrameDeallocate {
 }
 
 /// Tests
-
+#[cfg(feature = "test")]
 pub mod tests {
 
     pub fn run_tests() {

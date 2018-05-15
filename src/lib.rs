@@ -56,6 +56,7 @@ pub mod interrupts;
 #[macro_use]
 mod cpuio;
 /// Testing
+#[cfg(feature = "test")]
 mod tap;
 
 extern "C" {
@@ -97,7 +98,9 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) -> ! {
     println!("Try to write some things!");
     vga_buffer::change_color(vga_buffer::Color::White, vga_buffer::Color::Black);
 
-    run_tests();
+    #[cfg(feature = "test")] {
+        run_tests();
+    }
 
     loop {
         // We are waiting for interrupts here, so don't bother doing anything
@@ -105,6 +108,7 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) -> ! {
     }
 }
 
+#[cfg(feature = "test")]
 pub fn run_tests() {
     //vga_buffer::run_tests();
     memory::tests::run_tests();

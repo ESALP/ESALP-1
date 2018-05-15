@@ -83,7 +83,7 @@ $(kernel): $(rust_os) $(assembly_object_files) $(linker_script)
 # Rust static lib
 $(rust_os): export RUST_TARGET_PATH=$(shell pwd)
 $(rust_os): $(rust_source_files)
-	@xargo build --target $(target)
+	@xargo build --target $(target) --features test
 
 # Keyboard maps
 build/arch/$(arch)/%.bin: $(module)/keyboard/%.asm

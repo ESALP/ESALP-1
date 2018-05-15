@@ -386,6 +386,7 @@ pub fn remap_the_kernel<FA>(active_table: &mut ActivePageTable,
     frame_bitmap
 }
 
+#[cfg(feature = "test")]
 pub mod tests {
 
     use memory::{MemoryController,MEMORY_CONTROLLER,FrameAllocate};
