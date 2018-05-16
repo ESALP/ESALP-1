@@ -101,9 +101,7 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) -> ! {
     #[cfg(feature = "test")] {
         run_tests();
         // Shut down qemu
-        use cpuio::port::Port;
-        let mut p: Port<u8> = unsafe { Port::new(0xf4) };
-        p.write(0x00);
+        shutdown();
     }
 
     loop {
@@ -111,6 +109,14 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) -> ! {
         unsafe { asm!("hlt") }
     }
 }
+
+fn shutdown() -> ! {
+    use cpuio::port::Port;
+    let mut p: Port<u8> = unsafe { Port::new(0xf4) };
+    p.write(0x00);
+    unreachable!();
+}
+
 
 #[cfg(feature = "test")]
 pub fn run_tests() {
@@ -151,7 +157,8 @@ pub extern "C" fn panic_fmt(args: ::core::fmt::Arguments, file: &'static str, li
     println!("\t{}", args);
 
     #[cfg(feature = "test")] {
-        serial_println!("Bail out! - {}", args);
+        serial_println!("Bail out! - Panic at {}:{}. {}", file, line, args);
+        shutdown();
     }
 
     unsafe { KEXIT() }

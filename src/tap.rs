@@ -24,15 +24,15 @@ impl TAPTestGroup {
     }
 
     pub fn plan(&self) {
-        serial_println!("0..{}", self.count);
+        serial_println!("1..{}", self.count);
     }
 
     pub fn ok(&mut self, message: Option<&str>) {
+        self.count += 1;
         match message {
             Some(s) => serial_println!("ok {} - {}", self.count, s),
             None => serial_println!("ok {}", self.count),
         };
-        self.count += 1;
     }
 
     pub fn not_ok(&mut self, message: &str) {
