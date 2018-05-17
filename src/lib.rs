@@ -149,5 +149,10 @@ pub extern "C" fn panic_fmt(args: ::core::fmt::Arguments, file: &'static str, li
     vga_buffer::change_color(vga_buffer::Color::Red, vga_buffer::Color::Black);
     println!("\n\nPANIC at {}:{}", file, line);
     println!("\t{}", args);
+
+    #[cfg(feature = "test")] {
+        serial_println!("Bail out! - {}", args);
+    }
+
     unsafe { KEXIT() }
 }
