@@ -18,7 +18,8 @@ use rlibc;
 use memory::PAGE_SIZE;
 
 type BitmapEntry = usize;
-pub const EMPTY_ENTRY: BitmapEntry = 0;
+const EMPTY_ENTRY: BitmapEntry = 0;
+pub const BITMAP_BASE: usize = 0o177777_777_777_000_000_0000;
 
 fn first_bit(entry: BitmapEntry) -> u32 {
     return entry.trailing_zeros()
@@ -60,7 +61,7 @@ impl FrameBitmap {
         // kernel.
         let mut bitmap = FrameBitmap {
             bottom: unsafe {
-                Unique::new_unchecked(0o177777_777_777_000_000_0000 as *mut BitmapEntry)
+                Unique::new_unchecked(BITMAP_BASE as *mut BitmapEntry)
             },
             size: 0,
             current: 0,

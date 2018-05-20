@@ -120,7 +120,8 @@ impl Page {
             ref mut frame_allocator,
             stack_allocator: _,
         } = lock.as_mut().unwrap();
-        active_table.map_to(self, frame, flags, frame_allocator).expect("Unable to map frame because page is already taken");
+        active_table.map_to(self, frame, flags, frame_allocator)
+            .expect("Unable to map frame because page is already taken");
     }
 
     /// Map this `Page` to any availible `Frame`.
@@ -337,6 +338,7 @@ pub fn remap_the_kernel<FA>(active_table: &mut ActivePageTable,
             if string_table.section_name(&section) == ".init" {
                 // We do not map the init section because it is not
                 // used after boot
+                // FIXME do not leak these frames
                 continue;
             }
             assert!(section.addr as usize % PAGE_SIZE == 0,
@@ -394,8 +396,7 @@ pub mod tests {
     use super::entry::EntryFlags;
     use ::tap::GLOBAL_TEST_GROUP;
 
-    pub fn test_paging()
-    {
+    pub fn test_paging() {
 
         use core::ops::DerefMut;
         let mut tap_lock = GLOBAL_TEST_GROUP.lock();
@@ -408,24 +409,24 @@ pub mod tests {
             stack_allocator: _,
         } = lock.as_mut().unwrap();
 
-        // Address 0 is mapped
-        tap.assert_tap(active_table.mapper.translate(0).is_some(),
-                       "Address 0 not mapped");
-        // Second P1 entry
-        tap.assert_tap(active_table.mapper.translate(4096).is_some(),
-                       "Failed to translate second P1 entry");
-        // Second P2 entry
-        tap.assert_tap(active_table.mapper.translate(4096 * 512).is_some(),
-                       "Failed to translate second P2 entry");
-        // 300th P2 entry
-        tap.assert_tap(active_table.mapper.translate(4096 * 512 * 300).is_some(),
-                       "Failed to translate 300th P2 entry");
-        // Second P3 entry
-        tap.assert_tap(active_table.mapper.translate(4096 * 512 * 512).is_none(),
-                       "Should not have been able to translate second P3 entry");
-        // Last entry
-        tap.assert_tap(active_table.mapper.translate(4096 * 512 * 512 - 1).is_some(),
-                       "Failed to translate last entry");
+        // Address 0 should not be mappd
+        tap.assert_tap(active_table.mapper.translate(0).is_none(),
+                       "Address 0 mapped");
+
+        // Page table should be mapped
+        tap.assert_tap(
+            active_table.mapper.translate(super::table::P4 as usize).is_some(),
+            "Page table not recursively mapped!");
+
+        // Heap should be mapped (check first page)
+        tap.assert_tap(
+            active_table.mapper.translate(::memory::HEAP_START,).is_some(),
+            "Heap not mapped!");
+
+        // frame bitmap should be mapped (check first page)
+        tap.assert_tap(
+            active_table.mapper.translate(::memory::frame_bitmap::BITMAP_BASE)
+                .is_some(), "Frame bitmap not mapped!");
 
         // Test map_to
         let addr = 4096 * 512 * 512 * 12; // 12th p3 entry

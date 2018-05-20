@@ -143,7 +143,8 @@ pub extern "C" fn eh_personality() {}
 
 /// Runs when the allocator is out of memory
 #[lang = "oom"]
-fn oom() -> ! {
+#[no_mangle]
+pub fn oom() -> ! {
     panic!("Error, out of memory");
 }
 

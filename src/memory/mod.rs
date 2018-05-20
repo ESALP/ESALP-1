@@ -38,7 +38,7 @@ pub const PAGE_SIZE: usize = 4096;
 /// The begining of the kernel heap
 const HEAP_START: usize = 0o000_001_000_0000;
 /// The size of the kernel heap
-const HEAP_SIZE: usize = 100 * 1024;
+const HEAP_SIZE: usize = 25 * PAGE_SIZE;
 
 /// A struct that gives access to the physical and virtual memory managers.
 struct MemoryController {
@@ -216,8 +216,8 @@ pub mod tests {
         let mut lock = GLOBAL_TEST_GROUP.lock();
         let test_group = lock.deref_mut();
 
-        //let mut heap_test = Box::new(42); // this line causing page fault
+        let heap_test = Box::new(42);
         test_group.ok(None);
-        //test_group.assert_tap(*heap_test == 42, "Pointer allocation failed");
+        test_group.assert_tap(*heap_test == 42, "Could not access Box");
     }
 }
