@@ -100,7 +100,6 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) -> ! {
 
     #[cfg(feature = "test")] {
         run_tests();
-        // Shut down qemu
         shutdown();
     }
 
@@ -120,9 +119,7 @@ fn shutdown() -> ! {
 
 #[cfg(feature = "test")]
 pub fn run_tests() {
-    //vga_buffer::run_tests();
     memory::tests::run_tests();
-    //interrupts::run_tests();
     use core::ops::Deref;
     let lock = tap::GLOBAL_TEST_GROUP.lock();
     let tap = lock.deref();

@@ -9,16 +9,16 @@
 
 use spin::Mutex;
 
-pub struct TAPTestGroup {
+pub struct TestGroup {
     pub count: u8,
 }
 
-pub static GLOBAL_TEST_GROUP: Mutex<TAPTestGroup> = Mutex::new(TAPTestGroup::new());
+pub static GLOBAL_TEST_GROUP: Mutex<TestGroup> = Mutex::new(TestGroup::new());
 
-impl TAPTestGroup {
+impl TestGroup {
 
-    pub const fn new() -> TAPTestGroup {
-        TAPTestGroup {
+    pub const fn new() -> TestGroup {
+        TestGroup {
             count: 0,
         }
     }
