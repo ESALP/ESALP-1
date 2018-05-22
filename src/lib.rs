@@ -53,7 +53,11 @@ mod memory;
 // This must be pub to expose functions to the linker
 pub mod interrupts;
 /// IO abstractions in Rust
+#[macro_use]
 mod cpuio;
+/// Testing
+#[cfg(feature = "test")]
+mod tap;
 
 extern "C" {
     /// The kernel exit point. It disables interrupts, enters an infinite loop,
@@ -94,10 +98,29 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) -> ! {
     println!("Try to write some things!");
     vga_buffer::change_color(vga_buffer::Color::White, vga_buffer::Color::Black);
 
+    #[cfg(feature = "test")] {
+        run_tests();
+        shutdown();
+    }
+
     loop {
         // We are waiting for interrupts here, so don't bother doing anything
         unsafe { asm!("hlt") }
     }
+}
+
+fn shutdown() -> ! {
+    use cpuio::port::Port;
+    let mut p: Port<u8> = unsafe { Port::new(0xf4) };
+    p.write(0x00);
+    unreachable!();
+}
+
+
+#[cfg(feature = "test")]
+pub fn run_tests() {
+    let mut tap = tap::TestGroup::new();
+    memory::tests::run_tests(&mut tap);
 }
 
 #[allow(non_snake_case)]
@@ -114,9 +137,11 @@ pub extern "C" fn eh_personality() {}
 
 /// Runs when the allocator is out of memory
 #[lang = "oom"]
-fn oom() -> ! {
+#[no_mangle]
+pub fn oom() -> ! {
     panic!("Error, out of memory");
 }
+
 
 /// Runs during a `panic!()`
 #[no_mangle]
@@ -125,5 +150,11 @@ pub extern "C" fn panic_fmt(args: ::core::fmt::Arguments, file: &'static str, li
     vga_buffer::change_color(vga_buffer::Color::Red, vga_buffer::Color::Black);
     println!("\n\nPANIC at {}:{}", file, line);
     println!("\t{}", args);
+
+    #[cfg(feature = "test")] {
+        serial_println!("Bail out! - Panic at {}:{}. {}", file, line, args);
+        shutdown();
+    }
+
     unsafe { KEXIT() }
 }

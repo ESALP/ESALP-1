@@ -36,5 +36,4 @@ pub mod serial;
 
 pub fn init() {
     COM1.lock().init();
-    serial_println!("Hello serial!");
 }

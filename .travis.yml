@@ -3,11 +3,17 @@ language: rust
 rust:
     - nightly
 
-cache: cargo
+cache:
+    cargo: true
+    directories:
+        - $HOME/.cache/pip
+        - $HOME/.rustup
+        - $HOME/.xargo
 
 before_script:
     - rustup component add rust-src
     - (cargo install xargo || true)
+    - pip install tap.py --user
 
 sudo: false
 
@@ -18,7 +24,14 @@ notifications:
 addons:
     apt:
         packages:
+            # building
             - nasm
+            # testing
+            - qemu
+            - xorriso
+            - python-pip
 
 script:
     - make
+    - make clean
+    - make test | ~/.local/bin/tappy -

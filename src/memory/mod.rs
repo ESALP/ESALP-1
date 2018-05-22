@@ -38,7 +38,7 @@ pub const PAGE_SIZE: usize = 4096;
 /// The begining of the kernel heap
 const HEAP_START: usize = 0o000_001_000_0000;
 /// The size of the kernel heap
-const HEAP_SIZE: usize = 100 * 1024;
+const HEAP_SIZE: usize = 25 * PAGE_SIZE;
 
 /// A struct that gives access to the physical and virtual memory managers.
 struct MemoryController {
@@ -196,4 +196,23 @@ pub trait FrameAllocate {
 }
 pub trait FrameDeallocate {
     fn deallocate_frame(&mut self, frame: Frame);
+}
+
+/// Tests
+#[cfg(feature = "test")]
+pub mod tests {
+    use tap::TestGroup;
+
+    pub fn run_tests(tap: &mut TestGroup) {
+        // run the tests
+        test_memory_alloc(tap);
+        super::paging::tests::test_paging(tap);
+    }
+
+    fn test_memory_alloc(tap: &mut TestGroup) {
+        use alloc::boxed::Box;
+
+        let heap_test = Box::new(42);
+        tap.assert_tap(*heap_test == 42, "Could not access Box");
+    }
 }

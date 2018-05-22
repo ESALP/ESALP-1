@@ -120,7 +120,8 @@ impl Page {
             ref mut frame_allocator,
             stack_allocator: _,
         } = lock.as_mut().unwrap();
-        active_table.map_to(self, frame, flags, frame_allocator).expect("Unable to map frame because page is already taken");
+        active_table.map_to(self, frame, flags, frame_allocator)
+            .expect("Unable to map frame because page is already taken");
     }
 
     /// Map this `Page` to any availible `Frame`.
@@ -337,6 +338,7 @@ pub fn remap_the_kernel<FA>(active_table: &mut ActivePageTable,
             if string_table.section_name(&section) == ".init" {
                 // We do not map the init section because it is not
                 // used after boot
+                // FIXME do not leak these frames
                 continue;
             }
             assert!(section.addr as usize % PAGE_SIZE == 0,
@@ -386,35 +388,56 @@ pub fn remap_the_kernel<FA>(active_table: &mut ActivePageTable,
     frame_bitmap
 }
 
-//pub fn test_paging<A>(page_table: &mut ActivePageTable, allocator: &mut A)
-//    where A: FrameAllocator
-//{
-//    // Address 0 is mapped
-//    println!("Some = {:?}", page_table.translate(0));
-//    // Second P1 entry
-//    println!("Some = {:?}", page_table.translate(4096));
-//    // Second P2 entry
-//    println!("Some = {:?}", page_table.translate(4096 * 512));
-//    // 300th P2 entry
-//    println!("Some = {:?}", page_table.translate(4096 * 512 * 300));
-//    // Second P3 entry
-//    println!("None = {:?}", page_table.translate(4096 * 512 * 512));
-//    // Last entry
-//    println!("Some = {:?}", page_table.translate(4096 * 512 * 512 - 1));
-//
-//    // Test map_to
-//    let addr = 4096 * 512 * 512 * 12; // 12th p3 entry
-//    let page = Page::containing_address(addr);
-//    let frame = allocator.allocate_frame()
-//        .expect("No more frames :(");
-//    println!("None = {:?}, map to {:?}",
-//             page_table.translate(addr),
-//             frame);
-//    map_to(page, frame, EntryFlags::empty(), allocator);
-//    println!("Some = {:?}", page_table.translate(addr));
-//    println!("Next free frame: {:?}", allocator.allocate_frame());
-//
-//    // Test unmap
-//    unmap(Page::containing_address(addr), allocator);
-//    println!("None = {:?}", page_table.translate(addr));
-//}
+#[cfg(feature = "test")]
+pub mod tests {
+
+    use memory::{MemoryController,MEMORY_CONTROLLER,FrameAllocate};
+    use super::Page;
+    use super::entry::EntryFlags;
+    use tap::TestGroup;
+
+    pub fn test_paging(tap: &mut TestGroup) {
+        let mut lock = MEMORY_CONTROLLER.lock();
+        let &mut MemoryController {
+            ref mut active_table,
+            ref mut frame_allocator,
+            stack_allocator: _,
+        } = lock.as_mut().unwrap();
+
+        // Address 0 should not be mappd
+        tap.assert_tap(active_table.mapper.translate(0).is_none(),
+                       "Address 0 mapped");
+
+        // Page table should be mapped
+        tap.assert_tap(
+            active_table.mapper.translate(super::table::P4 as usize).is_some(),
+            "Page table not recursively mapped!");
+
+        // Heap should be mapped (check first page)
+        tap.assert_tap(
+            active_table.mapper.translate(::memory::HEAP_START,).is_some(),
+            "Heap not mapped!");
+
+        // frame bitmap should be mapped (check first page)
+        tap.assert_tap(
+            active_table.mapper.translate(::memory::frame_bitmap::BITMAP_BASE)
+                .is_some(), "Frame bitmap not mapped!");
+
+        // Test map_to
+        let addr = 4096 * 512 * 512 * 12; // 12th p3 entry
+        let page = Page::containing_address(addr);
+        let frame = frame_allocator.allocate_frame()
+            .expect("No more frames :(");
+        tap.assert_tap(active_table.mapper.translate(addr).is_none(),
+                 "Test page (12th P3), was unexpecteldly already mapped");
+        let res = active_table.map_to(page, frame, EntryFlags::empty(), frame_allocator);
+        tap.assert_tap(res.is_ok(),
+                       "Unable to successfully use map_to() to map 12th P3 entry");
+
+        // Test unmap
+        active_table.unmap(Page::containing_address(addr), frame_allocator);
+        tap.assert_tap(active_table.mapper.translate(addr).is_none(), 
+                       "Did non successfully unmap test page (12th P3)");
+    }
+
+}

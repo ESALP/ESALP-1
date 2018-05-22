@@ -21,3 +21,7 @@ version = "0.2.1"
 
 [lib]
 crate-type = ["staticlib"]
+
+[features]
+default = []
+test = []
