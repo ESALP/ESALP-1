@@ -7,23 +7,20 @@
 // This file may not be copied, modified, or distributed
 // except according to those terms
 
-use spin::Mutex;
+use core::ops::Drop;
 
 pub struct TestGroup {
     pub count: u8,
 }
 
-pub static GLOBAL_TEST_GROUP: Mutex<TestGroup> = Mutex::new(TestGroup::new());
-
 impl TestGroup {
-
     pub const fn new() -> TestGroup {
         TestGroup {
             count: 0,
         }
     }
 
-    pub fn plan(&self) {
+    fn plan(&self) {
         serial_println!("1..{}", self.count);
     }
 
@@ -46,5 +43,11 @@ impl TestGroup {
         } else {
             self.not_ok(message);
         }
+    }
+}
+
+impl Drop for TestGroup {
+    fn drop(&mut self) {
+        self.plan()
     }
 }

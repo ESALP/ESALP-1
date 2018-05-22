@@ -394,14 +394,9 @@ pub mod tests {
     use memory::{MemoryController,MEMORY_CONTROLLER,FrameAllocate};
     use super::Page;
     use super::entry::EntryFlags;
-    use ::tap::GLOBAL_TEST_GROUP;
+    use tap::TestGroup;
 
-    pub fn test_paging() {
-
-        use core::ops::DerefMut;
-        let mut tap_lock = GLOBAL_TEST_GROUP.lock();
-        let tap = tap_lock.deref_mut();
-
+    pub fn test_paging(tap: &mut TestGroup) {
         let mut lock = MEMORY_CONTROLLER.lock();
         let &mut MemoryController {
             ref mut active_table,

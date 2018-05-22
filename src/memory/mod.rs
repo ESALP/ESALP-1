@@ -201,23 +201,18 @@ pub trait FrameDeallocate {
 /// Tests
 #[cfg(feature = "test")]
 pub mod tests {
+    use tap::TestGroup;
 
-    pub fn run_tests() {
+    pub fn run_tests(tap: &mut TestGroup) {
         // run the tests
-        test_memory_alloc();
-        super::paging::tests::test_paging();
+        test_memory_alloc(tap);
+        super::paging::tests::test_paging(tap);
     }
 
-    fn test_memory_alloc() {
+    fn test_memory_alloc(tap: &mut TestGroup) {
         use alloc::boxed::Box;
-        use ::tap::GLOBAL_TEST_GROUP;
-
-        use core::ops::DerefMut;
-        let mut lock = GLOBAL_TEST_GROUP.lock();
-        let test_group = lock.deref_mut();
 
         let heap_test = Box::new(42);
-        test_group.ok(None);
-        test_group.assert_tap(*heap_test == 42, "Could not access Box");
+        tap.assert_tap(*heap_test == 42, "Could not access Box");
     }
 }

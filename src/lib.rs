@@ -119,11 +119,8 @@ fn shutdown() -> ! {
 
 #[cfg(feature = "test")]
 pub fn run_tests() {
-    memory::tests::run_tests();
-    use core::ops::Deref;
-    let lock = tap::GLOBAL_TEST_GROUP.lock();
-    let tap = lock.deref();
-    tap.plan();
+    let mut tap = tap::TestGroup::new();
+    memory::tests::run_tests(&mut tap);
 }
 
 #[allow(non_snake_case)]
