@@ -23,12 +23,15 @@ Current features:
   + Simple paging
     + With physical frame allocation _and_ deallocation
   + Kernel space heap
++ Text-based unit tests powered by [TAP](https://testanything.org/)
 + **More to come**
 
 ## How to Compile
 1. Install packages, ESALP requires `xargo`, `nasm`, `grub-mkrescue`, `ld`, and a unix environment to build. To run, use `qemu`.
 2. Use `make all` to build ESALP
 3. `make run` and you're done!
+
+If you want to run regressions, use `make test`
 
 ### Compilation on macOS
 ESALP also supports compilation on macOS. As macOS uses mostly Apple's infrastructure rather than linux's, it requires a bit more setup.
