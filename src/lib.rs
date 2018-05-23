@@ -17,7 +17,7 @@
 #![feature(alloc)]
 #![feature(const_fn, unique)]
 #![feature(associated_type_defaults)]
-#![feature(asm)]
+#![feature(asm,naked_functions, core_intrinsics)]
 #![feature(abi_x86_interrupt)]
 #![feature(ptr_internals)]
 #![no_std]
@@ -32,8 +32,6 @@ extern crate x86_64;
 extern crate bit_field;
 #[macro_use]
 extern crate bitflags;
-#[macro_use]
-extern crate lazy_static;
 /// A macro for running a function only once
 #[macro_use]
 extern crate once;
@@ -55,6 +53,9 @@ pub mod interrupts;
 /// IO abstractions in Rust
 #[macro_use]
 mod cpuio;
+mod sync;
+mod scheduler;
+<<<<<<< HEAD
 /// Testing
 #[cfg(feature = "test")]
 mod tap;
@@ -89,11 +90,16 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) -> ! {
     // Initialize memory
     memory::init(&boot_info);
 
+    // Initialize the scheduler
+    scheduler::init();
+
     // Initialize the IDT
     interrupts::init();
 
     // Initialize the serial port
     cpuio::init();
+
+    scheduler::test::run();
 
     println!("Try to write some things!");
     vga_buffer::change_color(vga_buffer::Color::White, vga_buffer::Color::Black);
@@ -105,7 +111,7 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) -> ! {
 
     loop {
         // We are waiting for interrupts here, so don't bother doing anything
-        unsafe { asm!("hlt") }
+        unsafe { asm!("hlt" :::: "volatile") }
     }
 }
 
@@ -141,7 +147,6 @@ pub extern "C" fn eh_personality() {}
 pub fn oom() -> ! {
     panic!("Error, out of memory");
 }
-
 
 /// Runs during a `panic!()`
 #[no_mangle]

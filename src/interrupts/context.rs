@@ -60,14 +60,21 @@ macro_rules! handler {
         #[naked]
         extern "C" fn wrapper() {
             unsafe {
+                asm!("push 0" :::: "intel", "volatile"); // push fake error code
                 pusha!();
                 asm!("
-                    lea rdi, [rsp + 15 * 8] // calculate exception frame pointer
+                    mov rdi, rsp // calculate isr context pointer
+                    sub rsp, 0
                     call $0
-                    ":: "i"($name as extern "C" fn (&ExceptionStackFrame))
+                    add rsp, 8
+                    mov rsp, rax // use returned stack pointer
+                    ":: "i"($name as extern "C" fn(&'static Context)
+                        -> &'static Context)
                     : "rdi" : "intel");
                 popa!();
-                asm!("iretq" :::: "intel", "volatile");
+                asm!("
+                     add rsp, 8 // pop dummy error code
+                     iretq" :::: "intel", "volatile");
                 ::core::intrinsics::unreachable();
             }
         }
@@ -81,12 +88,12 @@ macro_rules! handler_error_code {
             unsafe {
                 pusha!();
                 asm!("
-                    lea rdi, [rsp + 16 * 8] // get frame pointer
-                    mov rsi, [rsp + 15 * 8] // get error code
+                    mov rdi, rsp // get context pointer
                     sub rsp, 8 // align stack pointer
                     call $0
                     add rsp, 8 // undo alignment
-                    ":: "i"($name as extern "C" fn (&ExceptionStackFrame,u64))
+                    ":: "i"($name as extern "C" fn(&'static Context)
+                        -> &'static Context)
                     : "rdi" : "intel");
                 popa!();
                 asm!("
@@ -98,6 +105,54 @@ macro_rules! handler_error_code {
         wrapper
     }}
 }
+#[repr(C)]
+#[derive(Debug)]
+pub struct Context {
+    pub regs: Regs,
+    pub error_code: usize,
+    pub stack_frame: ExceptionStackFrame,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct Regs {
+    r15: usize,
+    r14: usize,
+    r13: usize,
+    r12: usize,
+    r11: usize,
+    r10: usize,
+    r9: usize,
+    r8: usize,
+    rdi: usize,
+    rsi: usize,
+    rdx: usize,
+    rcx: usize,
+    rbx: usize,
+    rbp: usize,
+    rax: usize,
+}
+
+impl Regs {
+    pub unsafe fn zero(&mut self) {
+        self.r15 = 0;
+        self.r14 = 0;
+        self.r13 = 0;
+        self.r12 = 0;
+        self.r11 = 0;
+        self.r10 = 0;
+        self.r9  = 0;
+        self.r8  = 0;
+        self.rdi = 0;
+        self.rsi = 0;
+        self.rdx = 0;
+        self.rcx = 0;
+        self.rbx = 0;
+        self.rbp = 0;
+        self.rax = 0;
+    }
+}
+
 #[repr(C)]
 pub struct ExceptionStackFrame {
     pub instruction_pointer: usize,

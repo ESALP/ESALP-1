@@ -42,6 +42,7 @@
 //!  | FPU Error Interrupt                    | 25 (0x18)  | Interrupt   | #FERR    | No          |
 
 #![allow(dead_code)]
+#![allow(unreachable_code)]
 
 use spin::{Mutex, Once};
 
@@ -50,13 +51,17 @@ use x86_64::registers::{self, flags};
 use x86_64::structures::tss::TaskStateSegment;
 
 use self::idt::Idt;
-use self::context::ExceptionStackFrame;
 use self::gdt::Gdt;
+
+use sync::IrqLock;
+use scheduler;
 
 use memory;
 
 use self::pic::ChainedPICs;
 pub use self::keyboard::KEYBOARD;
+
+pub use self::context::Context;
 
 /// Abstraction of the PS/2 keyboard
 mod keyboard;
@@ -72,49 +77,32 @@ mod context;
 
 /// Enable Interrupts
 #[inline]
-unsafe fn sti() {
+pub unsafe fn enable() {
     asm!("sti");
 }
 
 /// Disable Interrupts
 #[inline]
-unsafe fn cli() {
+pub unsafe fn disable() {
     asm!("cli");
 }
 
-/// Run the internal function with interrupts disabled
-///
-/// # Safety
-/// One must not take any locks or do any other operations that must block
-/// within the closure.
-#[inline]
-pub unsafe fn run_no_int<F, O>(mut f: F) -> O
-    where F: FnMut() -> O
-{
-    let enable = flags::flags().contains(flags::Flags::IF);
-    cli();
-    let o = f();
-    if enable {
-        sti();
-    }
-    o
+pub fn enabled() -> bool {
+    flags::flags().contains(flags::Flags::IF)
 }
 
 /// This is the Interrupt Descriptor Table that contains handlers for all
 /// interrupt vectors that we support. Each handler is set in its initialization
 /// and is not modified again.
-///
 // FIXME make CPU local
-static IDT: Once<Idt> = Once::new();
-
-pub fn get_idt() -> &'static Idt {
-    IDT.try().unwrap()
-}
+static IDT: IrqLock<Idt> = IrqLock::new(Idt::new());
 
 /// The Rust interface to the 8086 Programmable Interrupt Controller
 pub static PIC: Mutex<ChainedPICs> = Mutex::new(unsafe { ChainedPICs::new(0x20, 0x28) });
 
 const DF_TSS_INDEX: usize = 0;
+
+pub const YIELD_INT: u8 = 0x22;
 
 /// Static Task State Segment
 static TSS: Once<TaskStateSegment> = Once::new();
@@ -122,27 +110,6 @@ static TSS: Once<TaskStateSegment> = Once::new();
 static GDT: Once<Gdt> = Once::new();
 
 pub fn init() {
-    // Set up the IDT
-    IDT.call_once(|| {
-        let idt = Idt::new();
-
-        // Initialize handlers
-        idt.set_handler(0x0, handler!(de_handler));
-        idt.set_handler(0x3, handler!(breakpoint_handler));
-        unsafe {
-            // Use another stack to prevent triple faults
-            idt.set_handler(0x8, handler_error_code!(df_handler))
-                .set_stack_index(DF_TSS_INDEX as u16);
-        }
-        idt.set_handler(0xD, handler_error_code!(gp_handler));
-        idt.set_handler(0xE, handler_error_code!(pf_handler));
-        // PIC handlers
-        idt.set_handler(0x20, handler!(timer_handler));
-        idt.set_handler(0x21, handler!(kb_handler));
-
-        idt
-    });
-
     // Set up the TSS
     let double_fault_stack = memory::alloc_stack(1)
         .expect("Could not allocate double fault stack");
@@ -178,31 +145,52 @@ pub fn init() {
         load_tss(tss_selector);
     }
 
+    // Set up the IDT
+    let mut idt = IDT.lock();
+
+    // Initialize handlers
+    idt.set_handler(0x0, handler!(de_handler));
+    idt.set_handler(0x3, handler!(breakpoint_handler));
+    unsafe {
+        // Use another stack to prevent triple faults
+        idt.set_handler(0x8, handler_error_code!(df_handler))
+            .set_stack_index(DF_TSS_INDEX as u16);
+    }
+    idt.set_handler(0xD, handler_error_code!(gp_handler));
+    idt.set_handler(0xE, handler_error_code!(pf_handler));
+    // PIC handlers
+    idt.set_handler(0x20, handler!(timer_handler));
+    idt.set_handler(0x21, handler!(kb_handler));
+    idt.set_handler(YIELD_INT, handler!(yield_handler))
+        .set_privilege_level(3);
+
     // Set up the PIC and initialize interrupts.
     unsafe {
-        get_idt().load();
+        idt.load();
         {
             let mut pic = PIC.lock();
             pic.initialize();
         }
-        sti();
+        enable();
     }
 }
 
 /// Divide by zero handler
 ///
 /// Occurs when the hardware attempts to divide by zero. Unrecoverable.
-extern "C" fn de_handler(stack_frame: &ExceptionStackFrame) {
-    panic!("EXCEPTION DIVIDE BY ZERO\n{:#?}", stack_frame);
+extern "C" fn de_handler(c: &'static Context) -> &'static Context {
+    panic!("EXCEPTION DIVIDE BY ZERO\n{:#?}", c.stack_frame);
+    c
 }
 
 /// Breakpoint handler
 ///
 /// A harmless interrupt, operation is safely resumed after printing a message.
-extern "C" fn breakpoint_handler(stack_frame: &ExceptionStackFrame) {
+extern "C" fn breakpoint_handler(c: &'static Context) -> &'static Context {
     println!("Breakpoint at {:#?}\n{:#?}",
-             (stack_frame).instruction_pointer,
-             stack_frame);
+             (c.stack_frame).instruction_pointer,
+             c.stack_frame);
+    c
 }
 
 /// Double Fault handler
@@ -223,8 +211,9 @@ extern "C" fn breakpoint_handler(stack_frame: &ExceptionStackFrame) {
 ///                          | Stack-Segment Fault
 ///                          | General Protection Fault
 /// ------------------------ | ------------------------
-extern "C" fn df_handler(stack_frame: &ExceptionStackFrame, _: u64) {
-    panic!("\nEXCEPTION: DOUBLE FAULT\n{:#?}", stack_frame)
+extern "C" fn df_handler(c: &'static Context) -> &'static Context {
+    panic!("\nEXCEPTION: DOUBLE FAULT\n{:#?}", c.stack_frame);
+    c
 }
 
 /// General Protection Fault handler
@@ -238,8 +227,9 @@ extern "C" fn df_handler(stack_frame: &ExceptionStackFrame, _: u64) {
 ///
 /// *Error Code*: The General Protection Fault error code is the segment
 /// selector index when the exception is segment related, otherwise, 0.
-extern "C" fn gp_handler(stack_frame: &ExceptionStackFrame, error_code: u64) {
-    panic!("EXCEPTION GENERAL PROTECTION FAULT\nerror_code: {}\n{:#?}\n", error_code, stack_frame);
+extern "C" fn gp_handler(c: &'static Context) -> &'static Context {
+    panic!("EXCEPTION GENERAL PROTECTION FAULT\nerror_code: {}\n{:#?}\n", c.error_code, c.stack_frame);
+    c
 }
 
 /// Page Fault handler
@@ -250,23 +240,25 @@ extern "C" fn gp_handler(stack_frame: &ExceptionStackFrame, error_code: u64) {
 /// non-executable page.
 /// + A protection check (privileges, read/write) failed.
 /// + A reserved bit in the page directory or table entries is set to 1.
-extern "C" fn pf_handler(stack_frame: &ExceptionStackFrame, error_code: u64) {
-    panic!("EXCEPTION PAGE FAULT\nerror_code: {:b}\nAddress that caused the fault: {:#?}\n{:#?}",
-           error_code, registers::control_regs::cr2(), stack_frame);
+extern "C" fn pf_handler(context: &'static Context) -> &'static Context {
+    panic!("EXCEPTION PAGE FAULT\nerror_code: 0b{:b}\nAddress that caused the fault: {:#?}\n{:#?}",
+           context.error_code, registers::control_regs::cr2(), context.stack_frame);
+    context
 }
 
 /// Timer handler
-extern "C" fn timer_handler(_: &ExceptionStackFrame) {
+extern "C" fn timer_handler(c: &'static Context) -> &'static Context {
     unsafe {
         PIC.lock().master.end_of_interrupt();
     }
+    c
 }
 
 /// Keyboard handler
 ///
 /// This function pages the `Keyboard` port to get the key that was pressed, it then
 /// prints the associated byte to the screen and saves the state of the keyboard.
-extern "C" fn kb_handler(_: &ExceptionStackFrame) {
+extern "C" fn kb_handler(c: &'static Context) -> &'static Context {
     let mut kb = KEYBOARD.lock();
     match kb.port.read() {
         // If the key was just pressed,
@@ -320,4 +312,9 @@ extern "C" fn kb_handler(_: &ExceptionStackFrame) {
     unsafe {
         PIC.lock().master.end_of_interrupt();
     }
+    c
+}
+
+extern "C" fn yield_handler(c: &'static Context) -> &'static Context {
+    scheduler::_yield(c)
 }

@@ -32,7 +32,7 @@ start:
 	;
 	; We subtract KERNEL_BASE from the stack address because we are not yet
 	; mapped to the higher half
-	mov esp, stack_top - KERNEL_BASE
+	mov esp, kstack_top - KERNEL_BASE
 
 	; The multiboot2 specification requires the bootloader to load a pointer
 	; to the multiboot2 information structure in the `ebx` register. Here we
@@ -329,6 +329,8 @@ section .bss
 align 4096
 p4_table:
 	resb 4096
+global kstack_late_bottom
+kstack_late_bottom:
 low_p3_table:
 	resb 4096
 high_p3_table:
@@ -351,6 +353,7 @@ kernel_table:
 ; stack is properly aligned and failure to align the stack will result in
 ; undefined behavior.
 align 16
-stack_bottom:
+kstack_bottom:
 	resb 4096 * 5
-stack_top:
+global kstack_top
+kstack_top:

@@ -17,7 +17,12 @@ pub struct Stack {
 }
 
 impl Stack {
-    fn new(top: usize, bottom: usize) -> Stack {
+    /// Create a new stack with the given top and bottom
+    ///
+    /// # Safety
+    /// Top and bottom must be page aligned valid addresses that are not
+    /// already used
+    pub unsafe fn new(top: usize, bottom: usize) -> Stack {
         assert!(top > bottom);
 
         Stack {
@@ -44,10 +49,11 @@ impl StackAllocator {
         StackAllocator { range: page_range }
     }
 
+    /// Create a stack of `PAGE_SIZE * size` bytes
     pub fn alloc_stack<FA>(&mut self,
                            active_table: &mut ActivePageTable,
                            allocator: &mut FA,
-                           size: usize) -> Option<Stack>
+                           size: usize) -> Result<Stack, &'static str>
         where FA: FrameAllocate
     {
         // Only mutate in success
@@ -56,7 +62,7 @@ impl StackAllocator {
         let guard_page = range.next();
         let stack_start = range.next();
         let stack_end = match size {
-            0 => return None, /* Don't do anything for a zero sized stack */
+            0 => return Err("Stack is zero sized"), /* Don't do anything for a zero sized stack */
             1 => stack_start,
             n => range.nth(n - 2),
         };
@@ -77,9 +83,9 @@ impl StackAllocator {
                 let stack_top = end.start_address() + PAGE_SIZE;
                 let stack_bottom = start.start_address();
 
-                Some(Stack::new(stack_top, stack_bottom))
+                Ok(unsafe { Stack::new(stack_top, stack_bottom) })
             },
-            _ => None, /* Not enough pages */
+            _ => Err("Not enough pages in the stack allocator!"), /* Not enough pages */
         }
     }
 }

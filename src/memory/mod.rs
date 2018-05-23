@@ -52,7 +52,7 @@ static MEMORY_CONTROLLER: Mutex<Option<MemoryController>> = Mutex::new(None);
 
 
 /// Allocates a stack of `size` pages
-pub fn alloc_stack(size: usize) -> Option<Stack> {
+pub fn alloc_stack(size: usize) -> Result<Stack, &'static str> {
     let mut lock = MEMORY_CONTROLLER.lock();
     let &mut MemoryController {
         ref mut active_table,

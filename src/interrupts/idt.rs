@@ -9,10 +9,6 @@
 
 use bit_field::BitField;
 
-use core::cell::UnsafeCell;
-
-use super::run_no_int;
-
 /// The type of an interrupt service routine
 pub type HandlerFunc = unsafe extern "C" fn();
 
@@ -20,35 +16,35 @@ pub type HandlerFunc = unsafe extern "C" fn();
 ///
 /// # Safety
 /// The `IDT` must be CPU-local.
-pub struct Idt(UnsafeCell<[Entry; 40]>);
-
-// FIXME this is a hack until we have CPU local
-unsafe impl Sync for Idt {}
+pub struct Idt([Entry; 40]);
 
 impl Idt {
     /// Creates a new Idt, each entry is unused
-    pub fn new() -> Idt {
-        Idt(UnsafeCell::new([Entry::missing(); 40]))
+    pub const fn new() -> Idt {
+        Idt([Entry::missing(); 40])
     }
 
     /// Sets a certain entry as present and initializes it with a certain handler
-    pub fn set_handler(&self, entry: u8, handler: HandlerFunc) -> &mut EntryOptions {
+    pub fn set_handler(&mut self, entry: u8, handler: HandlerFunc) -> &mut EntryOptions {
         use x86_64::instructions::segmentation;
-        unsafe { run_no_int(|| {
-            let inner = self.0.get();
 
-            (*inner)[entry as usize] = Entry::new(segmentation::cs().0, handler);
-            &mut (*inner)[entry as usize].options
-        })}
+        self.0[entry as usize] = Entry::new(segmentation::cs().0, handler);
+        &mut self.0[entry as usize].options
     }
 
     /// Loads the given IDT into the CPU
     ///
     /// # Safety
     /// The IDT must be valid, if it is not undefined behaviour will most likely
-    /// occur. Also `self` must live for the duration of the kernel, a lifetime of
-    /// `'static` ensures this.
-    pub unsafe fn load(&'static self) {
+    /// occur. `self` must live for the duration of the kernel, however, as
+    /// long as it is only mutated while interrupts are disabled, access is safe.
+    /// For this reason we do not currently use 'static, as it would disallow any
+    /// mutable references.
+    // XXX There are two ways to do this. Either make the mutable functions
+    // take a &self and disable interrupts with them, or make them take a
+    // &mut self, and remove static on this function. Both will work, but I
+    // took the latter approach this time as this function is marked unsafe
+    pub unsafe fn load(&self) {
         use x86_64::instructions::tables::{lidt, DescriptorTablePointer};
         use core::mem::size_of;
 
@@ -60,10 +56,7 @@ impl Idt {
     }
 
     pub fn get_handler(&self, entry: u8) -> Entry {
-        unsafe { run_no_int(|| {
-            let inner = self.0.get();
-            (*inner)[entry as usize]
-        })}
+        self.0[entry as usize]
     }
 }
 
@@ -99,7 +92,7 @@ impl Entry {
     }
 
     /// Returns an uninitialized Entry
-    fn missing() -> Self {
+    const fn missing() -> Self {
         Entry {
             gdt_selector: 0,
             pointer_low: 0,
@@ -117,10 +110,8 @@ pub struct EntryOptions(u16);
 
 impl EntryOptions {
     /// Returns options with 'must be one' bits set
-    fn minimal() -> Self {
-        let mut options = 0;
-        options.set_bits(9..12, 0b111); // 'must be one' bits
-        EntryOptions(options)
+    const fn minimal() -> Self {
+        EntryOptions(0b111 << 9) // 'must be one' bits
     }
 
     /// Returns a option with `present` and `disable_interrupts` set
@@ -145,9 +136,9 @@ impl EntryOptions {
     }
 
     /// Sets the required privilege level(DPL) for invoking the handler. If
-    /// CPL < DPL, a #GP occurs.
+    /// CPL > DPL, a #GP occurs.
     ///
-    /// #Panics
+    /// # Panics
     /// Panic if DPL > 3
     pub fn set_privilege_level(&mut self, dpl: u16) -> &mut Self {
         self.0.set_bits(13..15, dpl);

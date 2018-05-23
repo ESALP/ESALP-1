@@ -24,6 +24,9 @@ Current features:
     + With physical frame allocation _and_ deallocation
   + Kernel space heap
 + Text-based unit tests powered by [TAP](https://testanything.org/)
+=======
++ Multitasking
+  + Basic kernel threads
 + **More to come**
 
 ## How to Compile
