@@ -44,6 +44,11 @@ impl TestGroup {
             self.not_ok(message);
         }
     }
+
+    pub fn diagnostic(&self, msg: &str) {
+        serial_println!("# {}", msg);
+    }
+
 }
 
 impl Drop for TestGroup {

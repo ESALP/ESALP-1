@@ -396,7 +396,7 @@ pub mod tests {
     use super::entry::EntryFlags;
     use tap::TestGroup;
 
-    pub fn test_paging(tap: &mut TestGroup) {
+    pub fn run(tap: &mut TestGroup) {
         let mut lock = MEMORY_CONTROLLER.lock();
         let &mut MemoryController {
             ref mut active_table,
@@ -404,6 +404,7 @@ pub mod tests {
             stack_allocator: _,
         } = lock.as_mut().unwrap();
 
+        tap.diagnostic("Testing page table mappings");
         // Address 0 should not be mappd
         tap.assert_tap(active_table.mapper.translate(0).is_none(),
                        "Address 0 mapped");
@@ -423,6 +424,7 @@ pub mod tests {
             active_table.mapper.translate(::memory::frame_bitmap::BITMAP_BASE)
                 .is_some(), "Frame bitmap not mapped!");
 
+        tap.diagnostic("Testing `map_to`");
         // Test map_to
         let addr = 4096 * 512 * 512 * 12; // 12th p3 entry
         let page = Page::containing_address(addr);
@@ -434,6 +436,7 @@ pub mod tests {
         tap.assert_tap(res.is_ok(),
                        "Unable to successfully use map_to() to map 12th P3 entry");
 
+        tap.diagnostic("Testing `unmap`");
         // Test unmap
         active_table.unmap(Page::containing_address(addr), frame_allocator);
         tap.assert_tap(active_table.mapper.translate(addr).is_none(), 

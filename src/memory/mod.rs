@@ -203,15 +203,16 @@ pub trait FrameDeallocate {
 pub mod tests {
     use tap::TestGroup;
 
-    pub fn run_tests(tap: &mut TestGroup) {
+    pub fn run(tap: &mut TestGroup) {
         // run the tests
         test_memory_alloc(tap);
-        super::paging::tests::test_paging(tap);
+        super::paging::tests::run(tap);
     }
 
     fn test_memory_alloc(tap: &mut TestGroup) {
         use alloc::boxed::Box;
 
+        tap.diagnostic("Testing `Box`");
         let heap_test = Box::new(42);
         tap.assert_tap(*heap_test == 42, "Could not access Box");
     }

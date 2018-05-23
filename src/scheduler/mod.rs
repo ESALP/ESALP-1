@@ -16,7 +16,6 @@ use interrupts::{Context,YIELD_INT};
 use self::thread::KThread;
 
 mod thread;
-pub mod test;
 
 // the scheduler must be created at runtime, but will not be called until
 // interrupts are enabled, which must be after the scheduler is created.
@@ -79,5 +78,25 @@ pub fn _yield(current_stack: &'static Context) -> &'static Context {
 pub fn thread_yield() {
     unsafe {
         asm!("int $0" :: "i"(YIELD_INT) :: "volatile")
+    }
+}
+
+/// Tests
+#[cfg(feature = "test")]
+pub mod tests {
+    use tap::TestGroup;
+    pub fn run(tap: &mut TestGroup) {
+        tap.diagnostic("Testing threading");
+        test_yield(tap);
+    }
+
+    fn test_yield(tap: &mut TestGroup) {
+        super::add(new);
+        super::thread_yield();
+        tap.ok(Some("Thread Returned"));
+    }
+
+    extern "C" fn new() {
+        super::thread_yield();
     }
 }
