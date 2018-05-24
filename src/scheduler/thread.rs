@@ -15,21 +15,21 @@ use core::mem;
 /// The `id` of the next thread to be created
 static ID: AtomicUsize = ATOMIC_USIZE_INIT;
 /// The basic number of "ticks" each program gets to run
-const TICKS: u8 = 100;
+const TICKS: u8 = 10;
 
 extern "C" {
     static kstack_late_bottom: usize;
     static kstack_top: usize;
 }
 
-enum State {
+pub enum State {
     Running,
     Ready,
     Sleeping,
 }
 
 pub struct KThread {
-    id: usize,
+    pub id: usize,
     stack: Stack,
     // Ready => Some(_), _ => None
     // XXX should this be a &'static _ or *const _ ? The former is wrong but
@@ -37,8 +37,8 @@ pub struct KThread {
     // This is the top of the kernel stack when the thread is queued, and
     // `None`when it is running.
     context: Option<&'static Context>,
-    quanta: u8,
-    state: State,
+    pub quanta: u8,
+    pub state: State,
 }
 
 impl KThread {
@@ -115,7 +115,9 @@ impl KThread {
     {
         assert!(self.context.is_none());
         self.context = Some(context);
+        self.state = State::Ready;
         // give `other` the default time slice
+        other.state = State::Running;
         other.quanta = TICKS;
         other.context.take().unwrap()
     }

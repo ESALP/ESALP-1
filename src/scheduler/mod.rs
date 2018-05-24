@@ -78,7 +78,50 @@ pub fn sched_yield(current_stack: &'static Context) -> &'static Context {
     threads.push_back(current_thread);
 
     *current = next_thread;
+    ret
+}
 
+/// Reduce the current thread's time slice by one tick. If it has no
+/// time left then yield to a new thread.
+pub fn tick(current_stack: &'static Context) -> &'static Context {
+    let mut lock = SCHEDULER.lock();
+    let &mut Scheduler {
+        ref mut threads,
+        ref mut current,
+        ref mut idle,
+    } = lock.as_mut().unwrap();
+
+    {
+        let mut running = current.as_mut().unwrap_or(idle);
+
+        running.quanta -=1;
+        if running.quanta > 0 {
+            return current_stack;
+        }
+    }
+    let mut next_thread = threads.pop_front();
+
+    if next_thread.is_none() && current.is_none() {
+        // Only the idle thread can run
+        return current_stack;
+    }
+    // Now swap threads
+    let ret = {
+        if let Some(current_thread) = current {
+            // `next_thread` is unknown and current is running
+            let next = next_thread.as_mut().unwrap_or(idle);
+            current_thread.swap(current_stack, next)
+        } else {
+            // `next_thread` must be Some(_) and idle is running
+            idle.swap(current_stack, next_thread.as_mut().unwrap())
+        }
+    };
+
+    if let Some(current) = current.take() {
+        threads.push_back(current);
+    }
+
+    *current = next_thread;
     ret
 }
 

@@ -251,7 +251,7 @@ extern "C" fn timer_handler(c: &'static Context) -> &'static Context {
     unsafe {
         PIC.lock().master.end_of_interrupt();
     }
-    c
+    scheduler::tick(c)
 }
 
 /// Keyboard handler
