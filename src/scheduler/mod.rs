@@ -19,8 +19,10 @@ mod thread;
 
 // the scheduler must be created at runtime, but will not be called until
 // interrupts are enabled, which must be after the scheduler is created.
+/// The sole `Scheduler` instance
 static SCHEDULER: IrqLock<Option<Scheduler>> = IrqLock::new(None);
 
+/// Basic round-robin scheduler
 struct Scheduler {
     threads: VecDeque<KThread>,
     // None => current == idle
@@ -38,10 +40,12 @@ impl Scheduler {
     }
 }
 
+/// Initialize the scheduler structure. May only be called once.
 pub fn init() {
     *SCHEDULER.lock() = Some(Scheduler::new());
 }
 
+/// Create a new thread that will start with the `start` function
 pub fn add(start: extern "C" fn()) -> Result<(), &'static str>{
     let thread = KThread::new(start)?;
 
@@ -51,8 +55,11 @@ pub fn add(start: extern "C" fn()) -> Result<(), &'static str>{
     Ok(())
 }
 
-// XXX yield is a keyword
-pub fn _yield(current_stack: &'static Context) -> &'static Context {
+/// Yield the thread that `current_stack` belongs to to a new thread.
+///
+/// If there are no available threads then the idle thread will be
+/// run.
+pub fn sched_yield(current_stack: &'static Context) -> &'static Context {
     let mut lock = SCHEDULER.lock();
     let &mut Scheduler {
         ref mut threads,
@@ -75,6 +82,7 @@ pub fn _yield(current_stack: &'static Context) -> &'static Context {
     ret
 }
 
+/// Reschedule the current kernel thread
 pub fn thread_yield() {
     unsafe {
         asm!("int $0" :: "i"(YIELD_INT) :: "volatile")

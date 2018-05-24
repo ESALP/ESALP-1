@@ -12,8 +12,10 @@ use memory::{alloc_stack, Stack};
 use core::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
 use core::mem;
 
+/// The `id` of the next thread to be created
 static ID: AtomicUsize = ATOMIC_USIZE_INIT;
-const QUANTA: u8 = 100;
+/// The basic number of "ticks" each program gets to run
+const TICKS: u8 = 100;
 
 extern "C" {
     static kstack_late_bottom: usize;
@@ -75,7 +77,7 @@ impl KThread {
             id: ID.fetch_add(1, Ordering::Relaxed),
             stack: stack,
             context: Some(context),
-            quanta: QUANTA,
+            quanta: TICKS,
             state: State::Ready,
         })
     }
@@ -89,10 +91,11 @@ impl KThread {
             id: ID.fetch_add(1, Ordering::Relaxed),
             stack: Stack::new(kstack_late_bottom, kstack_top),
             context: None, /* current thread */
-            quanta: QUANTA,
+            quanta: TICKS,
             state: State::Running,
         }
     }
+
     /// Return the "idle" thread
     ///
     /// # Safety
@@ -105,13 +108,15 @@ impl KThread {
         Self::new(idle).unwrap()
     }
 
+    /// Put `context` into the given thread and return the context
+    /// from the other thread. This should be used to swap threads.
     pub fn swap(&mut self, context: &'static Context, other: &mut KThread)
         -> &'static Context
     {
         assert!(self.context.is_none());
         self.context = Some(context);
         // give `other` the default time slice
-        other.quanta = QUANTA;
+        other.quanta = TICKS;
         other.context.take().unwrap()
     }
 }

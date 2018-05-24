@@ -316,5 +316,5 @@ extern "C" fn kb_handler(c: &'static Context) -> &'static Context {
 }
 
 extern "C" fn yield_handler(c: &'static Context) -> &'static Context {
-    scheduler::_yield(c)
+    scheduler::sched_yield(c)
 }
