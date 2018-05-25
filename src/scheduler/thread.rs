@@ -15,7 +15,7 @@ use core::mem;
 /// The `id` of the next thread to be created
 static ID: AtomicUsize = ATOMIC_USIZE_INIT;
 /// The basic number of "ticks" each program gets to run
-const TICKS: u8 = 10;
+pub const TICKS: u8 = 10;
 
 extern "C" {
     static kstack_late_bottom: usize;

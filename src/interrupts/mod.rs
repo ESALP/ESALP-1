@@ -102,7 +102,7 @@ pub static PIC: Mutex<ChainedPICs> = Mutex::new(unsafe { ChainedPICs::new(0x20, 
 
 const DF_TSS_INDEX: usize = 0;
 
-pub const YIELD_INT: u8 = 0x22;
+pub const SLEEP_INT: u8 = 0x22;
 
 /// Static Task State Segment
 static TSS: Once<TaskStateSegment> = Once::new();
@@ -161,7 +161,7 @@ pub fn init() {
     // PIC handlers
     idt.set_handler(0x20, handler!(timer_handler));
     idt.set_handler(0x21, handler!(kb_handler));
-    idt.set_handler(YIELD_INT, handler!(yield_handler))
+    idt.set_handler(SLEEP_INT, handler!(sleep_handler))
         .set_privilege_level(3);
 
     // Set up the PIC and initialize interrupts.
@@ -315,6 +315,11 @@ extern "C" fn kb_handler(c: &'static Context) -> &'static Context {
     c
 }
 
-extern "C" fn yield_handler(c: &'static Context) -> &'static Context {
-    scheduler::sched_yield(c)
+extern "C" fn sleep_handler(c: &'static Context) -> &'static Context {
+    let time = c.regs.rax;
+    if time == 0 {
+        scheduler::sched_yield(c)
+    } else {
+        scheduler::sched_sleep(c, time as u8)
+    }
 }
