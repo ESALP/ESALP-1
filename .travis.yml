@@ -34,4 +34,5 @@ addons:
 script:
     - make
     - make clean
-    - make test | ~/.local/bin/tappy -
+    - make test | ./script/split_test.pl
+    - ~/.local/bin/tappy test

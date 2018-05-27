@@ -242,12 +242,13 @@ extern "C" fn B() {
 #[cfg(feature = "test")]
 pub mod tests {
     use tap::TestGroup;
-    pub fn run(tap: &mut TestGroup) {
-        tap.diagnostic("Testing threading");
-        test_yield(tap);
+    pub fn run() {
+        test_yield();
     }
 
-    fn test_yield(tap: &mut TestGroup) {
+    fn test_yield() {
+        let mut tap = TestGroup::new(1);
+        tap.diagnostic("Testing yield");
         super::add(new);
         super::thread_yield();
         tap.ok(Some("Thread Returned"));

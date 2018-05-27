@@ -125,9 +125,8 @@ fn shutdown() -> ! {
 
 #[cfg(feature = "test")]
 pub fn run_tests() {
-    let mut tap = tap::TestGroup::new();
-    memory::tests::run(&mut tap);
-    scheduler::tests::run(&mut tap);
+    memory::tests::run();
+    scheduler::tests::run();
 }
 
 #[allow(non_snake_case)]

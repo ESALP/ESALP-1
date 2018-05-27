@@ -396,7 +396,7 @@ pub mod tests {
     use super::entry::EntryFlags;
     use tap::TestGroup;
 
-    pub fn run(tap: &mut TestGroup) {
+    pub fn run() {
         let mut lock = MEMORY_CONTROLLER.lock();
         let &mut MemoryController {
             ref mut active_table,
@@ -404,6 +404,7 @@ pub mod tests {
             stack_allocator: _,
         } = lock.as_mut().unwrap();
 
+        let mut tap = TestGroup::new(7);
         tap.diagnostic("Testing page table mappings");
         // Address 0 should not be mappd
         tap.assert_tap(active_table.mapper.translate(0).is_none(),

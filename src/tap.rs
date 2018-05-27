@@ -10,14 +10,18 @@
 use core::ops::Drop;
 
 pub struct TestGroup {
-    pub count: u8,
+    count: u8,
+    cur: u8,
 }
 
 impl TestGroup {
-    pub const fn new() -> TestGroup {
-        TestGroup {
-            count: 0,
-        }
+    pub fn new(count: u8) -> TestGroup {
+        let tap = TestGroup {
+            count: count,
+            cur: 0,
+        };
+        tap.plan();
+        tap
     }
 
     fn plan(&self) {
@@ -25,16 +29,18 @@ impl TestGroup {
     }
 
     pub fn ok(&mut self, message: Option<&str>) {
-        self.count += 1;
+        self.cur += 1;
         match message {
-            Some(s) => serial_println!("ok {} - {}", self.count, s),
-            None => serial_println!("ok {}", self.count),
+            Some(s) => serial_println!("ok {} - {}", self.cur, s),
+            None => serial_println!("ok {}", self.cur),
         };
+        assert!(self.cur <= self.count);
     }
 
     pub fn not_ok(&mut self, message: &str) {
-        serial_println!("not ok {} - {}", self.count, message);
-        self.count += 1;
+        self.cur += 1;
+        serial_println!("not ok {} - {}", self.cur, message);
+        assert!(self.cur <= self.count);
     }
 
     pub fn assert_tap(&mut self, cond: bool, message: &str) {
@@ -48,11 +54,11 @@ impl TestGroup {
     pub fn diagnostic(&self, msg: &str) {
         serial_println!("# {}", msg);
     }
-
 }
 
 impl Drop for TestGroup {
     fn drop(&mut self) {
-        self.plan()
+        // HACK: split tests
+        self.diagnostic("EOT");
     }
 }
