@@ -9,6 +9,7 @@
 
 use memory::{PAGE_SIZE, FrameAllocate};
 use memory::paging::{self, Page, PageIter, ActivePageTable};
+use core::ops::Drop;
 
 #[derive(Debug)]
 pub struct Stack {
@@ -87,5 +88,13 @@ impl StackAllocator {
             },
             _ => Err("Not enough pages in the stack allocator!"), /* Not enough pages */
         }
+    }
+}
+impl Drop for Stack {
+    /// Free the `Stack`'s pages back to the PMM
+    fn drop(&mut self) {
+        Page::range_inclusive(Page::containing_address(self.top),
+                              Page::containing_address(self.bottom))
+            .for_each(|x| x.unmap());
     }
 }

@@ -7,7 +7,7 @@
 // This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use interrupts::Context;
+use interrupts::{Context, EXIT_INT};
 use memory::{alloc_stack, Stack};
 use core::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
 use core::mem;
@@ -130,6 +130,6 @@ extern "C" fn idle() {
 }
 
 pub extern "C" fn exit() -> ! {
-    // TODO remove thread on exit
-    panic!("Thread exited");
+    unsafe { asm!("int $0" :: "i"(EXIT_INT) :: "volatile") };
+    unreachable!();
 }

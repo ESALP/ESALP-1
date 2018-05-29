@@ -7,6 +7,9 @@
 // This file may not be copied, modified, or distributed
 // except according to those terms.
 #![allow(unused)]
+//! The ESALP Scheduler™
+//!
+//! Round robin scheduler and threading
 
 use alloc::vec_deque::VecDeque;
 
@@ -87,7 +90,7 @@ pub fn sched_yield(current_stack: &'static Context) -> &'static Context {
 
 /// Make the current thread sleep for `time` quanta
 ///
-/// The thread is not gurenteed to run after `time` is complete, it will simply
+/// The thread is not guaranteed to run after `time` is complete, it will simply
 /// be resumed.
 /// `time` must not be zero
 pub fn sched_sleep(current_stack: &'static Context, time: u8) -> &'static Context {
@@ -130,6 +133,29 @@ pub fn sched_sleep(current_stack: &'static Context, time: u8) -> &'static Contex
     }
     // now lets put it in the queue
     sleeping.insert(index, current_thread);
+
+    ret
+}
+
+/// Remove the current thread from the scheduler and reschedule
+pub fn sched_exit(current_stack: &'static Context) -> &'static Context {
+    let mut lock = SCHEDULER.lock();
+    let &mut Scheduler {
+        ref mut threads,
+        ref mut sleeping,
+        ref mut current,
+        ref mut idle,
+    } = lock.as_mut().unwrap();
+
+    let mut current_thread = current.take().unwrap();
+    let mut next_thread = threads.pop_front();
+
+    let ret = {
+        let next = next_thread.as_mut().unwrap_or(idle);
+        current_thread.swap(current_stack, next)
+    };
+
+    *current = next_thread;
 
     ret
 }
@@ -226,16 +252,10 @@ pub fn test() {
 }
 
 extern "C" fn A() {
-    loop {
-        println!("A");
-        thread_sleep(20)
-    }
+    println!("A");
 }
 extern "C" fn B() {
-    loop {
-        println!("\tB");
-        thread_sleep(20)
-    }
+    println!("\tB");
 }
 
 /// Tests
@@ -266,7 +286,7 @@ pub mod tests {
         tap.diagnostic("Testing preempt");
         super::add(preempt_thread);
 
-        // spin until `preemt_thread` runs
+        // spin until `preempt_thread` runs
         while SPIN.load(Ordering::Acquire) != true {
             unsafe { asm!("pause" :::: "volatile") };
         }

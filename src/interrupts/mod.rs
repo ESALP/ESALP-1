@@ -12,34 +12,45 @@
 //!
 //!  Exceptions:
 //!
-//!  | Name                                   | Vector #   |    Type     | Mnemonic | Error Code? |
-//!  | -------------------------------------- | ---------- | ----------- | -------- | ----------- |
-//!  | Divide by Zero                         | 0  (0x0)   | Fault       | #DE      | No          |
-//!  | Debug                                  | 1  (0x1)   | Both        | #DB      | No          |
-//!  | Non-maskable Interrupt                 | 2  (0x2)   | Interrupt   | -        | No          |
-//!  | Breakpoint                             | 3  (0x3)   | Trap        | #BP      | No          |
-//!  | Overflow                               | 4  (0x4)   | Trap        | #OF      | No          |
-//!  | Bound Range Exceeded                   | 5  (0x5)   | Fault       | #BR      | No          |
-//!  | Invalid Opcode                         | 6  (0x6)   | Fault       | #UD      | No          |
-//!  | Device not Available                   | 7  (0x7)   | Fault       | #NM      | No          |
-//!  | Double Fault                           | 8  (0x8)   | Abort       | #DF      | No          |
-//!  | <del>Coprocessor Segment Overrun</del> | 9  (0x9)   | Fault       | -        | No          |
-//!  | Invalid TSS                            | 10 (0xA)   | Fault       | #TS      | Yes         |
-//!  | Segment not Present                    | 11 (0xB)   | Fault       | #NP      | Yes         |
-//!  | Stack-Segment Fault                    | 12 (0xC)   | Fault       | #SS      | Yes         |
-//!  | General Protection Fault               | 13 (0xD)   | Fault       | #GP      | Yes         |
-//!  | Page Fault                             | 14 (0xE)   | Fault       | #PF      | Yes         |
-//!  | Reserved                               | 15 (0xF)   | -           | -        | No          |
-//!  | x87 Floating Point Exception           | 16 (0x10)  | Fault       | #MF      | No          |
-//!  | Alignment Check                        | 17 (0x11)  | Fault       | #AC      | Yes         |
-//!  | Machine Check                          | 18 (0x12)  | Fault       | #MC      | No          |
-//!  | SIMD Floating-Point Exception          | 19 (0x13)  | Fault       | #XM/#XF  | No          |
-//!  | Virtualisation Exception               | 20 (0x14)  | -           | #VE      | No          |
-//!  | Reserved                               | 21 (0x15)  | -           | -        | No          |
-//!  | Security Exception                     | 22 (0x16)  | -           | #SX      | Yes         |
-//!  | Reserved                               | 23 (0x17)  | -           | -        | No          |
-//!  | Triple Fault                           | 24 (0x15)  | -           | -        | No          |
-//!  | FPU Error Interrupt                    | 25 (0x18)  | Interrupt   | #FERR    | No          |
+//!  | Name                                   | Vector #   | Type       | Mnemonic | Error Code? |
+//!  | -------------------------------------- | ---------- | ---------- | -------- | ----------- |
+//!  | Divide by Zero                         | 0  (0x0)   | Fault      | #DE      | No          |
+//!  | Debug                                  | 1  (0x1)   | Both       | #DB      | No          |
+//!  | Non-maskable Interrupt                 | 2  (0x2)   | Interrupt  | -        | No          |
+//!  | Breakpoint                             | 3  (0x3)   | Trap       | #BP      | No          |
+//!  | Overflow                               | 4  (0x4)   | Trap       | #OF      | No          |
+//!  | Bound Range Exceeded                   | 5  (0x5)   | Fault      | #BR      | No          |
+//!  | Invalid Opcode                         | 6  (0x6)   | Fault      | #UD      | No          |
+//!  | Device not Available                   | 7  (0x7)   | Fault      | #NM      | No          |
+//!  | Double Fault                           | 8  (0x8)   | Abort      | #DF      | No          |
+//!  | <del>Coprocessor Segment Overrun</del> | 9  (0x9)   | Fault      | -        | No          |
+//!  | Invalid TSS                            | 10 (0xA)   | Fault      | #TS      | Yes         |
+//!  | Segment not Present                    | 11 (0xB)   | Fault      | #NP      | Yes         |
+//!  | Stack-Segment Fault                    | 12 (0xC)   | Fault      | #SS      | Yes         |
+//!  | General Protection Fault               | 13 (0xD)   | Fault      | #GP      | Yes         |
+//!  | Page Fault                             | 14 (0xE)   | Fault      | #PF      | Yes         |
+//!  | Reserved                               | 15 (0xF)   | -          | -        | No          |
+//!  | x87 Floating Point Exception           | 16 (0x10)  | Fault      | #MF      | No          |
+//!  | Alignment Check                        | 17 (0x11)  | Fault      | #AC      | Yes         |
+//!  | Machine Check                          | 18 (0x12)  | Fault      | #MC      | No          |
+//!  | SIMD Floating-Point Exception          | 19 (0x13)  | Fault      | #XM/#XF  | No          |
+//!  | Virtualisation Exception               | 20 (0x14)  | -          | #VE      | No          |
+//!  | Reserved                               | 21 (0x15)  | -          | -        | No          |
+//!  | Security Exception                     | 22 (0x16)  | -          | #SX      | Yes         |
+//!  | Reserved                               | 23 (0x17)  | -          | -        | No          |
+//!  | Triple Fault                           | 24 (0x15)  | -          | -        | No          |
+//!  | FPU Error Interrupt                    | 25 (0x18)  | Interrupt  | #FERR    | No          |
+//!
+//!
+//!  Syscalls/IRQs:
+//!
+//!  | Name      | Vector #   | Type     | Arguments/Misc             |
+//!  | --------- | ---------- | -------- | -------------------------- |
+//!  | Timer     | 32 (0x20)  | IRQ (M)  | Data to read from keyboard |
+//!  | Keyboard  | 33 (0x21)  | IRQ (M)  | Data to read from keyboard |
+//!  | Yield     | 34 (0x22)  | Syscall  | `rax` == 0                 |
+//!  | Sleep     | 34 (0x22)  | Syscall  | Time to sleep is `rax`     |
+//!  | Exit      | 35 (0x23)  | Syscall  | None                       |
 
 #![allow(dead_code)]
 #![allow(unreachable_code)]
@@ -103,6 +114,7 @@ pub static PIC: Mutex<ChainedPICs> = Mutex::new(unsafe { ChainedPICs::new(0x20, 
 const DF_TSS_INDEX: usize = 0;
 
 pub const SLEEP_INT: u8 = 0x22;
+pub const EXIT_INT: u8 = 0x23;
 
 /// Static Task State Segment
 static TSS: Once<TaskStateSegment> = Once::new();
@@ -161,8 +173,8 @@ pub fn init() {
     // PIC handlers
     idt.set_handler(0x20, handler!(timer_handler));
     idt.set_handler(0x21, handler!(kb_handler));
-    idt.set_handler(SLEEP_INT, handler!(sleep_handler))
-        .set_privilege_level(3);
+    idt.set_handler(SLEEP_INT, handler!(sleep_handler));
+    idt.set_handler(EXIT_INT, handler!(exit_handler));
 
     // Set up the PIC and initialize interrupts.
     unsafe {
@@ -322,4 +334,8 @@ extern "C" fn sleep_handler(c: &'static Context) -> &'static Context {
     } else {
         scheduler::sched_sleep(c, time as u8)
     }
+}
+
+extern "C" fn exit_handler(c: &'static Context) -> &'static Context {
+    scheduler::sched_exit(c)
 }
