@@ -51,6 +51,8 @@ mod memory;
 /// Interrupts code
 // This must be pub to expose functions to the linker
 pub mod interrupts;
+/// Process Management
+mod process;
 /// IO abstractions in Rust
 #[macro_use]
 mod cpuio;
@@ -105,6 +107,8 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) -> ! {
 
     println!("Try to write some things!");
     vga_buffer::change_color(vga_buffer::Color::White, vga_buffer::Color::Black);
+
+    process::create_process();
 
     #[cfg(feature = "test")] {
         run_tests();
