@@ -98,8 +98,6 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) -> ! {
     // Initialize the serial port
     cpuio::init();
 
-    scheduler::test();
-
     println!("Try to write some things!");
     vga_buffer::change_color(vga_buffer::Color::White, vga_buffer::Color::Black);
 

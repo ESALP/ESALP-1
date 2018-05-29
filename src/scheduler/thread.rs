@@ -87,9 +87,11 @@ impl KThread {
     /// This function may only be called once on the main thread
     pub unsafe fn main() -> KThread {
         assert_has_not_been_called!("The main kthread can be created only once!");
+        let top = &kstack_late_bottom as *const _ as usize;
+        let bottom = &kstack_top as *const _ as usize;
         KThread {
             id: ID.fetch_add(1, Ordering::Relaxed),
-            stack: Stack::new(kstack_late_bottom, kstack_top),
+            stack: Stack::new(bottom, top),
             context: None, /* current thread */
             quanta: TICKS,
             state: State::Running,

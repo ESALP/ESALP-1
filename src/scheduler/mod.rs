@@ -244,20 +244,6 @@ pub fn thread_sleep(time: u8) {
     }
 }
 
-pub fn test() {
-    add(A);
-    add(B);
-    thread_sleep(255);
-    println!("Re-entered the main thread!");
-}
-
-extern "C" fn A() {
-    println!("A");
-}
-extern "C" fn B() {
-    println!("\tB");
-}
-
 /// Tests
 #[cfg(feature = "test")]
 pub mod tests {
