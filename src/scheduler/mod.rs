@@ -244,17 +244,35 @@ pub mod tests {
     use tap::TestGroup;
     pub fn run() {
         test_yield();
+        test_preempt();
     }
 
     fn test_yield() {
         let mut tap = TestGroup::new(1);
         tap.diagnostic("Testing yield");
-        super::add(new);
+        super::add(yield_thread);
         super::thread_yield();
         tap.ok(Some("Thread Returned"));
     }
 
-    extern "C" fn new() {
+    extern "C" fn yield_thread() {
         super::thread_yield();
+    }
+
+    use core::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
+    static SPIN: AtomicBool = ATOMIC_BOOL_INIT;
+    fn test_preempt() {
+        let mut tap = TestGroup::new(1);
+        tap.diagnostic("Testing preempt");
+        super::add(preempt_thread);
+
+        // spin until `preemt_thread` runs
+        while SPIN.load(Ordering::Acquire) != true {
+            unsafe { asm!("pause" :::: "volatile") };
+        }
+        tap.ok(None);
+    }
+    extern "C" fn preempt_thread() {
+        SPIN.store(true, Ordering::Release);
     }
 }

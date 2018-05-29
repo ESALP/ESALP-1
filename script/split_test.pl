@@ -4,6 +4,7 @@ mkdir "test";
 my $cur = 0;
 my $out;
 my $filename;
+my $line;
 sub openfile {
 	$cur += 1;
 	$filename = "test/".$cur.".t";
@@ -17,7 +18,10 @@ while (<>) {
 	} else {
 		print $out $_;
 	}
+	$last = $_;
 }
 # Delete the extra file
 close $out or die "Cannot close $filename: $!";
-unlink $filename or die "Cannot delete $filename: $!";
+if ($last =~ /EOT/) {
+	unlink $filename or die "Cannot delete $filename: $!";
+}
