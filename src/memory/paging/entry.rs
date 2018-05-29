@@ -12,7 +12,8 @@ use multiboot2::ElfSection;
 use memory::Frame;
 
 /// A representation of a page table entry.
-pub struct Entry(u64);
+#[derive(Clone)]
+pub struct Entry(pub u64);
 
 impl Entry {
     /// Checks if an entry is unused.
