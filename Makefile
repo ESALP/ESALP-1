@@ -32,6 +32,7 @@ all: $(kernel)
 clean:
 	@xargo clean
 	@rm -r build
+	@rm -r test || true
 
 qflags := -s -serial stdio
 

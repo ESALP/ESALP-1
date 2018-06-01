@@ -13,20 +13,15 @@
 
 use alloc::vec_deque::VecDeque;
 
-use sync::IrqLock;
 use interrupts::{Context, SLEEP_INT};
+use smp::current;
 
 use self::thread::{KThread, State, TICKS};
 
 mod thread;
 
-// the scheduler must be created at runtime, but will not be called until
-// interrupts are enabled, which must be after the scheduler is created.
-/// The sole `Scheduler` instance
-static SCHEDULER: IrqLock<Option<Scheduler>> = IrqLock::new(None);
-
 /// Basic round-robin scheduler
-struct Scheduler {
+pub struct Scheduler {
     // State::Ready
     threads: VecDeque<KThread>,
     // State::Sleeping -- delta queue
@@ -37,7 +32,7 @@ struct Scheduler {
 }
 
 impl Scheduler {
-    fn new() -> Scheduler {
+    pub fn new() -> Scheduler {
         unsafe { Scheduler {
             threads: VecDeque::new(),
             sleeping: VecDeque::new(),
@@ -47,18 +42,11 @@ impl Scheduler {
     }
 }
 
-/// Initialize the scheduler structure. May only be called once.
-pub fn init() {
-    *SCHEDULER.lock() = Some(Scheduler::new());
-}
-
 /// Create a new thread that will start with the `start` function
 pub fn add(start: extern "C" fn()) -> Result<(), &'static str>{
     let thread = KThread::new(start)?;
 
-    let mut lock = SCHEDULER.lock();
-    let sched = lock.as_mut().unwrap();
-    sched.threads.push_back(thread);
+    current().sched.lock().threads.push_back(thread);
     Ok(())
 }
 
@@ -66,13 +54,13 @@ pub fn add(start: extern "C" fn()) -> Result<(), &'static str>{
 ///
 /// If there are no available threads then the idle thread will be run.
 pub fn sched_yield(current_stack: &'static Context) -> &'static Context {
-    let mut lock = SCHEDULER.lock();
+    let mut lock = current().sched.lock();
     let &mut Scheduler {
         ref mut threads,
         ref mut sleeping,
         ref mut current,
         ref mut idle,
-    } = lock.as_mut().unwrap();
+    } = &mut *lock;
 
     let mut current_thread = current.take().unwrap();
     let mut next_thread = threads.pop_front();
@@ -94,13 +82,13 @@ pub fn sched_yield(current_stack: &'static Context) -> &'static Context {
 /// be resumed.
 /// `time` must not be zero
 pub fn sched_sleep(current_stack: &'static Context, time: u8) -> &'static Context {
-    let mut lock = SCHEDULER.lock();
+    let mut lock = current().sched.lock();
     let &mut Scheduler {
         ref mut threads,
         ref mut sleeping,
         ref mut current,
         ref mut idle,
-    } = lock.as_mut().unwrap();
+    } = &mut *lock;
 
     // first, swap out with a new thread
     let mut current_thread = current.take().unwrap();
@@ -139,13 +127,13 @@ pub fn sched_sleep(current_stack: &'static Context, time: u8) -> &'static Contex
 
 /// Remove the current thread from the scheduler and reschedule
 pub fn sched_exit(current_stack: &'static Context) -> &'static Context {
-    let mut lock = SCHEDULER.lock();
+    let mut lock = current().sched.lock();
     let &mut Scheduler {
         ref mut threads,
         ref mut sleeping,
         ref mut current,
         ref mut idle,
-    } = lock.as_mut().unwrap();
+    } = &mut *lock;
 
     let mut current_thread = current.take().unwrap();
     let mut next_thread = threads.pop_front();
@@ -163,13 +151,13 @@ pub fn sched_exit(current_stack: &'static Context) -> &'static Context {
 /// Reduce the current thread's time slice by one tick. If it has no
 /// time left then yield to a new thread.
 pub fn tick(current_stack: &'static Context) -> &'static Context {
-    let mut lock = SCHEDULER.lock();
+    let mut lock = current().sched.lock();
     let &mut Scheduler {
         ref mut threads,
         ref mut sleeping,
         ref mut current,
         ref mut idle,
-    } = lock.as_mut().unwrap();
+    } = &mut *lock;
 
     // update the sleeping thread list
     if let Some(thread) = sleeping.front_mut() {

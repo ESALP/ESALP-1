@@ -55,6 +55,8 @@ pub mod interrupts;
 mod cpuio;
 mod sync;
 mod scheduler;
+/// Utilities for multi-CPU processing
+mod smp;
 /// Testing
 #[cfg(feature = "test")]
 mod tap;
@@ -89,8 +91,10 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) -> ! {
     // Initialize memory
     memory::init(&boot_info);
 
-    // Initialize the scheduler
-    scheduler::init();
+    // Initialize CPU local variables and the scheduler
+    unsafe {
+        smp::CpuLocal::init()
+    };
 
     // Initialize the IDT
     interrupts::init();
