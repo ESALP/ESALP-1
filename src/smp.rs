@@ -40,6 +40,8 @@ pub struct CpuLocal {
     direct: NonNull<CpuLocal>,
     pub id: usize,
     pub sched: IrqLock<Scheduler>,
+    #[cfg(feature = "test")]
+    test: u32
 }
 
 impl CpuLocal {
@@ -48,6 +50,8 @@ impl CpuLocal {
             direct: NonNull::dangling(),
             id: ID.fetch_add(1, Ordering::Relaxed),
             sched: IrqLock::new(Scheduler::new()),
+            #[cfg(feature = "test")]
+            test: 0xdeadbeef
         }
     }
 
@@ -73,5 +77,20 @@ pub fn current() -> &'static CpuLocal {
 pub fn cpu_id() -> u32 {
     unsafe {
         read_gs_offset!(offset_of!(CpuLocal, id)) as u32
+    }
+}
+
+#[cfg(feature = "test")]
+pub mod tests {
+    use tap::TestGroup;
+    pub fn run() {
+        check_local();
+    }
+
+    fn check_local() {
+        let mut tap = TestGroup::new(1);
+        tap.diagnostic("Testing `CpuLocal`");
+        tap.assert_tap(super::current().test == 0xdeadbeef,
+            "Fetched the current cpu local variable incorrectly!");
     }
 }
