@@ -102,6 +102,16 @@ impl Entry {
             reserved: 0,
         }
     }
+
+    pub fn func(self) -> HandlerFunc {
+        use core::mem;
+        let pointer = ((self.pointer_high as usize) << 32)
+            | ((self.pointer_middle as usize) << 16)
+            | (self.pointer_low as usize);
+        // XXX only `transmute` usage in the kernel so far, replace with
+        // something better if possible
+        unsafe { mem::transmute::<usize, HandlerFunc>(pointer) }
+    }
 }
 
 /// A representation of the `Options` field of an `Entry`

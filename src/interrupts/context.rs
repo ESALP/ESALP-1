@@ -92,6 +92,7 @@ macro_rules! handler_error_code {
                     sub rsp, 8 // align stack pointer
                     call $0
                     add rsp, 8 // undo alignment
+                    mov rsp, rax // use returned stack pointer
                     ":: "i"($name as extern "C" fn(&'static Context)
                         -> &'static Context)
                     : "rdi" : "intel");

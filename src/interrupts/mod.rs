@@ -339,3 +339,141 @@ extern "C" fn sleep_handler(c: &'static Context) -> &'static Context {
 extern "C" fn exit_handler(c: &'static Context) -> &'static Context {
     scheduler::sched_exit(c)
 }
+
+#[cfg(feature = "test")]
+pub mod tests {
+    use tap::TestGroup;
+
+    /// Returns true iff a block raises a certain interrupt.
+    macro_rules! assert_throws {
+        ($vector:expr, $func:block) => {{
+            use scheduler;
+            use core::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
+            use super::context::Context;
+
+            // XXX we don't have `thread_wait()`, so wait on a thread through
+            // an atomic int
+            static WAIT: AtomicUsize = ATOMIC_USIZE_INIT;
+            const FAILURE_MAGIC: usize = 2;
+            const SUCCESS_MAGIC: usize = 1;
+
+            // Run the block in a new thread
+            #[allow(unused_unsafe)]
+            extern "C" fn interrupt_thread() {
+                unsafe {
+                    $func
+                }
+                // The block has fallen through, indicate failure.
+                WAIT.store(FAILURE_MAGIC, Ordering::Release);
+                // A return is an implicit exit
+            }
+            extern "C" fn tmp_handler(c: &'static Context) -> &'static Context {
+                WAIT.store(SUCCESS_MAGIC, Ordering::Release);
+                scheduler::sched_exit(c)
+            }
+
+            // If this fails, $vector is not a valid expression
+            let int: u8 = $vector;
+            let old_handler;
+            {
+                let mut idt = super::IDT.lock();
+                // Get the old function
+                old_handler = idt.get_handler(int).func();
+                match int {
+                    // Error code vectors
+                    0xA ... 0xE | 0x11 | 0x16 => {
+                        idt.set_handler(int, handler_error_code!(tmp_handler));
+                    },
+                    _ => {
+                        idt.set_handler(int, handler!(tmp_handler));
+                    },
+                }
+            }
+
+            scheduler::add(interrupt_thread)
+                .expect("Could not generate a new thread to test interrupts");
+
+            // spin until the block is complete or interrupted
+            let mut res;
+            while {
+                res = WAIT.load(Ordering::Acquire);
+                res == 0
+            } {
+                scheduler::thread_yield();
+            }
+
+            // Restore the old handler and hope that nothing interrupted into
+            // the new handler except for the thread we just ran >…<
+            super::IDT.lock().set_handler(int, old_handler);
+
+            if res == FAILURE_MAGIC {
+                false
+            } else if res == SUCCESS_MAGIC {
+                true
+            } else {
+                panic!("Error in assert_throws!()");
+            }
+        }}
+    }
+
+    pub fn run() {
+        test_interrupts();
+        test_no_interrupts();
+    }
+
+    fn test_interrupts() {
+        let mut tap = TestGroup::new(5);
+        tap.diagnostic("Testing interrupts");
+
+        tap.assert_tap(assert_throws!(0x0, {
+            asm!("
+                 mov rcx, 0
+                 div rcx" ::: "rax","rcx" : "intel", "volatile");
+        }), "#DE not caught from a divide by zero");
+
+        tap.assert_tap(assert_throws!(0x3, {
+            // Dereference a NULL
+            asm!("int 3" :::: "intel", "volatile");
+        }), "#PF not caught after a NULL dereference");
+
+        tap.assert_tap(assert_throws!(0x6, {
+            asm!("ud2" :::: "intel", "volatile");
+        }), "#UD not caught after an invalid opcode execution");
+
+        // TODO double faults, needs a separate stack
+        //tap.assert_tap(assert_throws!(0x8, {
+        //    fn stack_overflow() {
+        //        stack_overflow();
+        //    }
+        //    stack_overflow();
+        //}), "#DF not caught after a stack overflow");
+
+        tap.assert_tap(assert_throws!(0xD, {
+            asm!("
+                mov rbx, 0xfeedbeefbaadf00d
+                mov [rbx], rax"
+                ::: "rbx" : "intel", "volatile");
+        }), "#GP not caught after a noncanonical address dereference");
+
+        tap.assert_tap(assert_throws!(0xE, {
+            asm!("
+                xor rbx, rbx
+                mov [rbx], rax"
+                ::: "rbx" : "intel", "volatile");
+        }), "#PF not caught after a NULL dereference");
+    }
+
+    fn test_no_interrupts() {
+        let mut tap = TestGroup::new(0x18);
+        tap.diagnostic("Making sure exceptions are not happening");
+        for i in 0..0x18 {
+            tap.assert_tap(!assert_throws!(i, {
+                // do some ordinary stuff
+                let mut _a = 0;
+                for i in 0..50 {
+                    _a += i;
+                }
+            }), "Exception was thrown for no reason");
+        }
+    }
+}

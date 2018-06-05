@@ -130,6 +130,7 @@ pub fn run_tests() {
     memory::tests::run();
     scheduler::tests::run();
     smp::tests::run();
+    interrupts::tests::run();
 }
 
 #[allow(non_snake_case)]
