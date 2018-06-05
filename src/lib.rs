@@ -19,6 +19,7 @@
 #![feature(associated_type_defaults)]
 #![feature(asm, naked_functions, core_intrinsics)]
 #![feature(abi_x86_interrupt)]
+#![feature(panic_implementation)]
 #![feature(ptr_internals)]
 #![no_std]
 
@@ -154,14 +155,13 @@ pub fn oom() -> ! {
 
 /// Runs during a `panic!()`
 #[no_mangle]
-#[lang = "panic_fmt"]
-pub extern "C" fn panic_fmt(args: ::core::fmt::Arguments, file: &'static str, line: u32) -> ! {
+#[panic_implementation]
+pub extern "C" fn panic_fmt(pi: &core::panic::PanicInfo) -> ! {
     vga_buffer::change_color(vga_buffer::Color::Red, vga_buffer::Color::Black);
-    println!("\n\nPANIC at {}:{}", file, line);
-    println!("\t{}", args);
+    println!("\n\nESALP {}", pi);
 
     #[cfg(feature = "test")] {
-        serial_println!("Bail out! - Panic at {}:{}. {}", file, line, args);
+        serial_println!("Bail out! - {}", pi);
         shutdown();
     }
 

@@ -11,6 +11,7 @@ cache:
         - $HOME/.xargo
 
 before_script:
+    - rustup update
     - rustup component add rust-src
     - (cargo install xargo || true)
     - pip install tap.py --user
