@@ -27,7 +27,7 @@ mod area_frame_allocator;
 /// Physical frame allocator that uses a bitmap.
 mod frame_bitmap;
 /// Virtual paging module.
-pub mod paging;
+mod paging;
 
 /// The kernel is linked to `KERNEL_BASE + 1M`
 pub const KERNEL_BASE: usize = 0xFFFF_FFFF_8000_0000;
@@ -41,14 +41,14 @@ const HEAP_START: usize = 0o000_001_000_0000;
 const HEAP_SIZE: usize = 25 * PAGE_SIZE;
 
 /// A struct that gives access to the physical and virtual memory managers.
-pub struct MemoryController {
-    pub active_table:ActivePageTable,
-    pub frame_allocator: FrameBitmap,
-    pub stack_allocator: stack_allocator::StackAllocator,
+struct MemoryController {
+    active_table:ActivePageTable,
+    frame_allocator: FrameBitmap,
+    stack_allocator: stack_allocator::StackAllocator,
 }
 
 /// A static `MemoryController`. Will always be Some(_) after init completes.
-pub static MEMORY_CONTROLLER: Mutex<Option<MemoryController>> = Mutex::new(None);
+static MEMORY_CONTROLLER: Mutex<Option<MemoryController>> = Mutex::new(None);
 
 
 /// Allocates a stack of `size` pages

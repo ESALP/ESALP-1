@@ -16,7 +16,7 @@ use core::ptr::Unique;
 /// An interface to the active page table.
 pub struct Mapper {
     /// This must be `Table::P4`
-    pub p4: Unique<Table<Level4>>,
+    p4: Unique<Table<Level4>>,
 }
 
 impl Mapper {
