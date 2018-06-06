@@ -372,6 +372,8 @@ pub mod tests {
                 scheduler::sched_exit(c)
             }
 
+            WAIT.store(0, Ordering::Release);
+
             // If this fails, $vector is not a valid expression
             let int: u8 = $vector;
             let old_handler;
@@ -418,7 +420,7 @@ pub mod tests {
 
     pub fn run() {
         test_interrupts();
-        test_no_interrupts();
+        //test_no_interrupts();
     }
 
     fn test_interrupts() {
@@ -432,7 +434,6 @@ pub mod tests {
         }), "#DE not caught from a divide by zero");
 
         tap.assert_tap(assert_throws!(0x3, {
-            // Dereference a NULL
             asm!("int 3" :::: "intel", "volatile");
         }), "#PF not caught after a NULL dereference");
 

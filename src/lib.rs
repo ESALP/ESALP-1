@@ -132,6 +132,7 @@ pub fn run_tests() {
     scheduler::tests::run();
     smp::tests::run();
     interrupts::tests::run();
+    cpuio::tests::run();
 }
 
 #[allow(non_snake_case)]

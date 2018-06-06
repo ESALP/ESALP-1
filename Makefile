@@ -34,7 +34,7 @@ clean:
 	@rm -r build
 	@rm -r test || true
 
-qflags := -s -serial stdio
+qflags := -s -serial stdio -serial null
 
 cargo_flags :=
 

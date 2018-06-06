@@ -16,7 +16,7 @@ use super::port::Port;
 pub const COM1: u16 = 0x3F8;
 pub const COM2: u16 = 0x2F8;
 pub const COM3: u16 = 0x3E8;
-pub const COM4: u16 = 0x2e8;
+pub const COM4: u16 = 0x2E8;
 
 bitflags! {
     /// Set transmission protocol with this register
@@ -210,5 +210,32 @@ impl ::core::fmt::Write for Serial {
             self.write(byte);
         }
         Ok(())
+    }
+}
+
+#[cfg(feature = "test")]
+pub mod tests {
+    use tap::TestGroup;
+    use super::{Serial, ModemControl};
+
+    pub fn run() {
+        test_transmission();
+    }
+
+    // Tests COM2 because COM1 is used for tests
+    fn test_transmission() {
+        let mut serial = unsafe { Serial::new(super::COM2) };
+
+        // Set COM2 to loopback mode
+        serial.modem_ctrl.write(ModemControl::LOOP.bits);
+
+        let mut tap = TestGroup::new(10);
+        tap.diagnostic("Testing the UART serial port");
+
+        for i in 20u8..30 {
+            serial.write(i);
+            tap.assert_tap(i == serial.read(),
+                "Data written to the serial port was different from data read!");
+        }
     }
 }

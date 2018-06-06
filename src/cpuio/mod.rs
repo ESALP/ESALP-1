@@ -37,3 +37,10 @@ pub mod serial;
 pub fn init() {
     COM1.lock().init();
 }
+
+#[cfg(feature = "test")]
+pub mod tests {
+    pub fn run() {
+        super::serial::tests::run();
+    }
+}
