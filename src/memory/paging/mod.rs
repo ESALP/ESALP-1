@@ -26,7 +26,7 @@ mod entry;
 /// Abstraction of the page table.
 mod table;
 /// A page to temporarily map a frame.
-pub mod temporary_page;
+mod temporary_page;
 /// An interface to the active page table.
 mod mapper;
 
@@ -189,7 +189,7 @@ impl Iterator for PageIter {
 
 /// An abstraction to the Active table, dereferences to the `Mapper` type.
 pub struct ActivePageTable {
-    pub mapper: Mapper,
+    mapper: Mapper,
 }
 
 impl Deref for ActivePageTable {
@@ -270,7 +270,7 @@ impl ActivePageTable {
 
 /// A level 4 table that is not yet used
 pub struct InactivePageTable {
-    pub p4_frame: Frame,
+    p4_frame: Frame,
 }
 
 impl InactivePageTable {

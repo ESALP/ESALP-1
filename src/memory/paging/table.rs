@@ -30,7 +30,7 @@ pub const P4: *mut Table<Level4> = 0o177777_776_776_776_776_0000 as *mut _;
 
 /// A page table
 pub struct Table<L: TableLevel> {
-    pub entries: [Entry; ENTRY_COUNT],
+    entries: [Entry; ENTRY_COUNT],
     level: PhantomData<L>,
 }
 

@@ -13,7 +13,7 @@ use memory::Frame;
 
 /// A representation of a page table entry.
 #[derive(Clone)]
-pub struct Entry(pub u64);
+pub struct Entry(u64);
 
 impl Entry {
     /// Checks if an entry is unused.
