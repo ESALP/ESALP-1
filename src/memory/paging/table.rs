@@ -43,6 +43,23 @@ impl<L> Table<L>
             entry.set_unused();
         }
     }
+    
+    pub fn clone_higher_half<A>(&self, allocator: &mut A) -> &mut Table<L>
+        where A: FrameAllocate 
+    {
+        let frame = allocator.allocate_frame().expect("Unable to allocate frame.");
+        
+        let table: &mut Table<L> = unsafe { &mut *(frame.start_address() as *mut _) };
+        // TODO: is this necessary?
+        table.zero();
+
+        let mut i = 0b1_0000_0000; // == 0x100 == 256
+        while i < self.entries.len() {
+            table[i] = self.entries[i].clone();
+            i += 1;
+        }
+        table
+    }
 }
 
 /// These methods can only be used if the given table is a parent to other tables.

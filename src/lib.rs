@@ -104,7 +104,7 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) -> ! {
     println!("Try to write some things!");
     vga_buffer::change_color(vga_buffer::Color::White, vga_buffer::Color::Black);
 
-    //process::create_process();
+ //   process::create_process();
 
     #[cfg(feature = "test")] {
         run_tests();
