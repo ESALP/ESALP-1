@@ -12,7 +12,7 @@ use multiboot2::ElfSection;
 use memory::Frame;
 
 /// A representation of a page table entry.
-#[derive(Clone)]
+#[derive(Clone,PartialEq,Debug)]
 pub struct Entry(u64);
 
 impl Entry {

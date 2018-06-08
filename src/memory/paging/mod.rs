@@ -280,12 +280,19 @@ impl InactivePageTable {
     /// that is returned has recursive mapping, so activating it is safe.
     pub fn new(frame: Frame,
                active_table: &mut ActivePageTable,
-               temporary_page: &mut TemporaryPage)
+               temporary_page: &mut TemporaryPage,
+               copy_kernel: bool)
                -> InactivePageTable {
         {
             let table = temporary_page.map_table_frame(frame.clone(), active_table);
-            // Now that it's mapped we can zero it
+
+            // Now that it's mapped we can zero it and copy in the kernel
             table.zero();
+            let active_p4 = active_table.mapper.p4();
+            if copy_kernel {
+                active_p4.clone_higher_half_into(table);
+            }
+
             // Now set up recursive mapping for the table
             table[510].set(frame.clone(), EntryFlags::PRESENT | EntryFlags::WRITABLE);
         }
@@ -317,8 +324,17 @@ pub fn remap_the_kernel<FA>(active_table: &mut ActivePageTable,
     let mut new_table = {
         let frame = allocator.allocate_frame()
             .expect("No more frames");
-        InactivePageTable::new(frame, &mut ACTIVE_TABLE.lock(), &mut temporary_page)
+        InactivePageTable::new(frame, &mut ACTIVE_TABLE.lock(), &mut temporary_page, false)
     };
+
+    //FIXME: for some reason the p3 at the 511th position 
+    //       in this original p4 is not recursively mapped correctly.
+    //       This code triggers that.
+    //
+    //serial_println!("About to try to map at 511th p4, 510th p3, 0th p2");
+    //let frame = allocator.allocate_frame().unwrap();
+    //let page = Page::containing_address(0xffffffff80101000);
+    //active_table.mapper.map_to(page, frame, EntryFlags::PRESENT, &mut allocator).expect("Unable to map sample page");
 
     active_table.with(&mut new_table, &mut temporary_page, |mapper| {
 
@@ -397,6 +413,11 @@ pub mod tests {
     use tap::TestGroup;
 
     pub fn run() {
+        test_mapping();
+        super::table::tests::run();
+    }
+
+    fn test_mapping() {
         let mut lock = MEMORY_CONTROLLER.lock();
         let &mut MemoryController {
             ref mut active_table,

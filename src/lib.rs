@@ -42,6 +42,9 @@ extern crate alloc;
 #[macro_use]
 /// Abstraction of the VGA text buffer
 mod vga_buffer;
+/// IO abstractions in Rust
+#[macro_use]
+mod cpuio;
 /// Memory management
 mod memory;
 /// Interrupts code
@@ -49,9 +52,6 @@ mod memory;
 pub mod interrupts;
 /// Process Management
 //mod process;
-/// IO abstractions in Rust
-#[macro_use]
-mod cpuio;
 mod sync;
 mod scheduler;
 /// Utilities for multi-CPU processing
