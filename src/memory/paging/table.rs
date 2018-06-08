@@ -44,21 +44,23 @@ impl<L> Table<L>
         }
     }
     
-    pub fn clone_higher_half<A>(&self, allocator: &mut A) -> &mut Table<L>
-        where A: FrameAllocate 
+    pub fn clone_higher_half_into<A>(&self, table: &mut Table<A>)
+        where A: TableLevel
     {
-        let frame = allocator.allocate_frame().expect("Unable to allocate frame.");
-        
-        let table: &mut Table<L> = unsafe { &mut *(frame.start_address() as *mut _) };
-        // TODO: is this necessary?
-        table.zero();
-
         let mut i = 0b1_0000_0000; // == 0x100 == 256
         while i < self.entries.len() {
             table[i] = self.entries[i].clone();
             i += 1;
         }
-        table
+    }
+
+    // TODO: Contitionally compile this only when debugging?
+    pub fn print_entries(&self) {
+        let mut i = 0x0;
+        while i < self.entries.len() {
+            serial_println!("{:x?}", self.entries[i]);
+            i += 1
+        }
     }
 }
 
@@ -157,4 +159,57 @@ impl HierarchicalLevel for Level3 {
 }
 impl HierarchicalLevel for Level2 {
     type NextLevel = Level1;
+}
+
+#[cfg(feature = "test")]
+pub mod tests {
+    use memory::{MemoryController,MEMORY_CONTROLLER,FrameAllocate};
+    use tap::TestGroup;
+
+    pub fn run() {
+
+        test_copy_higher_half()
+    }
+
+    use ::memory::paging::Page;
+    use ::memory::paging::TemporaryPage;
+
+
+    fn test_copy_higher_half() {
+       let mut lock = MEMORY_CONTROLLER.lock();
+        let &mut MemoryController {
+            ref mut active_table,
+            ref mut frame_allocator,
+            stack_allocator: _,
+        } = lock.as_mut().unwrap();
+
+        let mut tap = TestGroup::new(6);
+
+        // map the new table
+        let addr = 4096 * 512 * 512 * 12; // random address
+        let page = Page::containing_address(addr);
+        let mut temp_page = TemporaryPage::new(page, frame_allocator);
+        let frame = frame_allocator.allocate_frame().expect("Unable to allocate frame.");
+        let new_p4 = temp_page.map_table_frame(frame, active_table);
+
+        // now, clone it from the old one
+        let active_p4 = active_table.mapper.p4();
+        active_p4.clone_higher_half_into(new_p4);
+
+        tap.diagnostic("Testing copying a p4");
+        tap.assert_tap(new_p4[0].is_unused(),
+                       "Lower half not zeroed on copied p4 (zero)");
+        tap.assert_tap(new_p4[0b0_0001_0000].is_unused(),
+                       "Lower half not zeroed on copied p4 (random)");
+        tap.assert_tap(new_p4[0b0_1111_1111].is_unused(),
+                       "Lower half not zeroed on copied p4 (top of lower half)");
+
+        tap.assert_tap(new_p4[0b1_0000_0000] == active_p4[0b1_0000_0000],
+                       "Higher half not identical to previous p4 (bottom)");
+        tap.assert_tap(new_p4[0b1_0000_1000] == active_p4[0b1_0000_1000],
+                       "Higher half not identical to previous p4 (random)");
+        tap.assert_tap(new_p4[510] == active_p4[510],
+                       "Higher half not identical to previous p4 (recursive mapping)");
+
+    }
 }
