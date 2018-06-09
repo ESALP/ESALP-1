@@ -47,7 +47,7 @@ impl<L> Table<L>
     pub fn clone_higher_half_into<A>(&self, table: &mut Table<A>)
         where A: TableLevel
     {
-        let mut i = 0b1_0000_0000; // == 0x100 == 256
+        let mut i = 0x100;
         while i < self.entries.len() {
             table[i] = self.entries[i].clone();
             i += 1;
@@ -56,7 +56,7 @@ impl<L> Table<L>
 
     // TODO: Contitionally compile this only when debugging?
     pub fn print_entries(&self) {
-        let mut i = 0x0;
+        let mut i = 0;
         while i < self.entries.len() {
             serial_println!("{:x?}", self.entries[i]);
             i += 1
@@ -174,7 +174,6 @@ pub mod tests {
     use ::memory::paging::Page;
     use ::memory::paging::TemporaryPage;
 
-
     fn test_copy_higher_half() {
        let mut lock = MEMORY_CONTROLLER.lock();
         let &mut MemoryController {
@@ -199,14 +198,14 @@ pub mod tests {
         tap.diagnostic("Testing copying a p4");
         tap.assert_tap(new_p4[0].is_unused(),
                        "Lower half not zeroed on copied p4 (zero)");
-        tap.assert_tap(new_p4[0b0_0001_0000].is_unused(),
+        tap.assert_tap(new_p4[0x008].is_unused(),
                        "Lower half not zeroed on copied p4 (random)");
-        tap.assert_tap(new_p4[0b0_1111_1111].is_unused(),
+        tap.assert_tap(new_p4[0x0ff].is_unused(),
                        "Lower half not zeroed on copied p4 (top of lower half)");
 
-        tap.assert_tap(new_p4[0b1_0000_0000] == active_p4[0b1_0000_0000],
+        tap.assert_tap(new_p4[0x100] == active_p4[0x100],
                        "Higher half not identical to previous p4 (bottom)");
-        tap.assert_tap(new_p4[0b1_0000_1000] == active_p4[0b1_0000_1000],
+        tap.assert_tap(new_p4[0x108] == active_p4[0x108],
                        "Higher half not identical to previous p4 (random)");
         tap.assert_tap(new_p4[510] == active_p4[510],
                        "Higher half not identical to previous p4 (recursive mapping)");
