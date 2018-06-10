@@ -103,15 +103,24 @@ impl Entry {
         }
     }
 
-    pub fn func(self) -> HandlerFunc {
+    pub fn func(self) -> Option<HandlerFunc> {
         use core::mem;
-        let pointer = ((self.pointer_high as usize) << 32)
-            | ((self.pointer_middle as usize) << 16)
-            | (self.pointer_low as usize);
-        // XXX only `transmute` usage in the kernel so far, replace with
-        // something better if possible
-        unsafe { mem::transmute::<usize, HandlerFunc>(pointer) }
+        if self.options.is_present() {
+            let pointer = ((self.pointer_high as usize) << 32)
+                | ((self.pointer_middle as usize) << 16)
+                | (self.pointer_low as usize);
+            // XXX only `transmute` usage in the kernel so far, replace with
+            // something better if possible
+            Some(unsafe { mem::transmute::<usize, HandlerFunc>(pointer) })
+        } else {
+            None
+        }
     }
+
+    pub fn options(&self) -> &EntryOptions {
+        &self.options
+    }
+
 }
 
 /// A representation of the `Options` field of an `Entry`
@@ -137,6 +146,11 @@ impl EntryOptions {
         self.0.set_bit(15, present);
         self
     }
+
+    fn is_present(&self) -> bool {
+        self.0.get_bit(15)
+    }
+
 
     /// Let the CPU disable hardware interrupts when the handler is invoked.
     /// By default, interrupts are disabled.
@@ -175,5 +189,10 @@ impl EntryOptions {
         // starts at 0. Therefore we need to add 1 here.
         self.0.set_bits(0..3, index + 1);
         self
+    }
+
+    /// Get the TSS stack index for the given options if it exists
+    pub fn get_stack_index(&self) -> Option<u16> {
+        self.0.get_bits(0..3).checked_sub(1)
     }
 }

@@ -111,7 +111,9 @@ static IDT: IrqLock<Idt> = IrqLock::new(Idt::new());
 /// The Rust interface to the 8086 Programmable Interrupt Controller
 pub static PIC: Mutex<ChainedPICs> = Mutex::new(unsafe { ChainedPICs::new(0x20, 0x28) });
 
-const DF_TSS_INDEX: usize = 0;
+const DF_TSS_INDEX: u16 = 0;
+#[cfg(feature = "test")]
+const TEST_TSS_INDEX: u16 = 1;
 
 pub const SLEEP_INT: u8 = 0x22;
 pub const EXIT_INT: u8 = 0x23;
@@ -123,13 +125,22 @@ static GDT: Once<Gdt> = Once::new();
 
 pub fn init() {
     // Set up the TSS
-    let double_fault_stack = memory::alloc_stack(1)
-        .expect("Could not allocate double fault stack");
-
     let tss = TSS.call_once(|| {
         let mut tss = TaskStateSegment::new();
-        tss.interrupt_stack_table[DF_TSS_INDEX] =
+
+        let double_fault_stack = memory::alloc_stack(1)
+            .expect("Could not allocate double fault stack");
+
+        tss.interrupt_stack_table[DF_TSS_INDEX as usize] =
             VirtualAddress(double_fault_stack.top());
+
+        #[cfg(feature = "test")] {
+            let test_stack = memory::alloc_stack(1)
+                .expect("Could not allocate test stack");
+            tss.interrupt_stack_table[TEST_TSS_INDEX as usize] =
+                VirtualAddress(test_stack.top());
+        }
+
         tss
     });
 
@@ -166,7 +177,7 @@ pub fn init() {
     unsafe {
         // Use another stack to prevent triple faults
         idt.set_handler(0x8, handler_error_code!(df_handler))
-            .set_stack_index(DF_TSS_INDEX as u16);
+            .set_stack_index(DF_TSS_INDEX);
     }
     idt.set_handler(0xD, handler_error_code!(gp_handler));
     idt.set_handler(0xE, handler_error_code!(pf_handler));
@@ -347,6 +358,12 @@ pub mod tests {
     /// Returns true iff a block raises a certain interrupt.
     macro_rules! assert_throws {
         ($vector:expr, $func:block) => {{
+            // Disallow recursive expansions
+            #[allow(unused_macros)]
+            macro_rules! assert_throws {
+                () => ()
+            }
+
             use scheduler;
             use core::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
             use super::context::Context;
@@ -376,20 +393,22 @@ pub mod tests {
 
             // If this fails, $vector is not a valid expression
             let int: u8 = $vector;
+
+            // Get the old function & TSS index, and set the new ones
             let old_handler;
+            let old_tss;
             {
                 let mut idt = super::IDT.lock();
-                // Get the old function
                 old_handler = idt.get_handler(int).func();
-                match int {
-                    // Error code vectors
-                    0xA ... 0xE | 0x11 | 0x16 => {
-                        idt.set_handler(int, handler_error_code!(tmp_handler));
-                    },
-                    _ => {
-                        idt.set_handler(int, handler!(tmp_handler));
-                    },
-                }
+                old_tss = idt.get_handler(int).options().get_stack_index();
+                unsafe {
+                    match int {
+                        // Error code vectors
+                        0xA ... 0xE | 0x11 | 0x16 =>
+                            idt.set_handler(int, handler_error_code!(tmp_handler)),
+                        _ => idt.set_handler(int, handler!(tmp_handler)),
+                    }.set_stack_index(super::TEST_TSS_INDEX)
+                };
             }
 
             scheduler::add(interrupt_thread)
@@ -404,9 +423,23 @@ pub mod tests {
                 scheduler::thread_yield();
             }
 
-            // Restore the old handler and hope that nothing interrupted into
-            // the new handler except for the thread we just ran >…<
-            super::IDT.lock().set_handler(int, old_handler);
+            // Restore the old handler & TSS if they existed and hope that
+            // nothing interrupted into the new handler except for the thread
+            // we just ran >…<
+            match (old_handler, old_tss) {
+                (Some(handler), Some(index)) => {
+                    unsafe {
+                        super::IDT.lock().set_handler(int, handler)
+                            .set_stack_index(index)
+                    };
+                },
+
+                (Some(handler), None) => {
+                    super::IDT.lock().set_handler(int, handler);
+                }
+
+                _ => (),
+            }
 
             if res == FAILURE_MAGIC {
                 false
@@ -424,30 +457,30 @@ pub mod tests {
     }
 
     fn test_interrupts() {
-        let mut tap = TestGroup::new(5);
+        let mut tap = TestGroup::new(6);
         tap.diagnostic("Testing interrupts");
 
         tap.assert_tap(assert_throws!(0x0, {
             asm!("
-                 mov rcx, 0
+                 xor rcx, rcx
                  div rcx" ::: "rax","rcx" : "intel", "volatile");
         }), "#DE not caught from a divide by zero");
 
         tap.assert_tap(assert_throws!(0x3, {
             asm!("int 3" :::: "intel", "volatile");
-        }), "#PF not caught after a NULL dereference");
+        }), "#DB not caught after debug interrupt!");
 
         tap.assert_tap(assert_throws!(0x6, {
             asm!("ud2" :::: "intel", "volatile");
         }), "#UD not caught after an invalid opcode execution");
 
-        // TODO double faults, needs a separate stack
-        //tap.assert_tap(assert_throws!(0x8, {
-        //    fn stack_overflow() {
-        //        stack_overflow();
-        //    }
-        //    stack_overflow();
-        //}), "#DF not caught after a stack overflow");
+        tap.assert_tap(assert_throws!(0x8, {
+            #[allow(unconditional_recursion)]
+            fn stack_overflow() {
+                stack_overflow();
+            }
+            stack_overflow();
+        }), "#DF not caught after a stack overflow");
 
         tap.assert_tap(assert_throws!(0xD, {
             asm!("
