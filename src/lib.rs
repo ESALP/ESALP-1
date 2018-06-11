@@ -43,19 +43,19 @@ extern crate hole_list_allocator;
 /// Higher-level data structures that use the heap
 extern crate alloc;
 
+// NOTE: for mods that involve macros, they must be
+//       above any mod they will be used from.
 #[macro_use]
 /// Abstraction of the VGA text buffer
 mod vga_buffer;
-/// IO abstractions in Rust
 #[macro_use]
+/// IO abstractions in Rust
 mod cpuio;
 /// Memory management
 mod memory;
 /// Interrupts code
 // This must be pub to expose functions to the linker
 pub mod interrupts;
-/// Process Management
-//mod process;
 mod sync;
 mod scheduler;
 /// Utilities for multi-CPU processing
@@ -107,8 +107,6 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) -> ! {
 
     println!("Try to write some things!");
     vga_buffer::change_color(vga_buffer::Color::White, vga_buffer::Color::Black);
-
- //   process::create_process();
 
     #[cfg(feature = "test")] {
         run_tests();

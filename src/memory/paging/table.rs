@@ -44,6 +44,7 @@ impl<L> Table<L>
         }
     }
     
+    /// Copies the higher half of self into table
     pub fn clone_higher_half_into<A>(&self, table: &mut Table<A>)
         where A: TableLevel
     {
@@ -54,6 +55,7 @@ impl<L> Table<L>
         }
     }
 
+    /// Print all entries of the table
     // TODO: Contitionally compile this only when debugging?
     pub fn print_entries(&self) {
         let mut i = 0;
@@ -167,7 +169,6 @@ pub mod tests {
     use tap::TestGroup;
 
     pub fn run() {
-
         test_copy_higher_half()
     }
 
@@ -207,8 +208,8 @@ pub mod tests {
                        "Higher half not identical to previous p4 (bottom)");
         tap.assert_tap(new_p4[0x108] == active_p4[0x108],
                        "Higher half not identical to previous p4 (random)");
-        tap.assert_tap(new_p4[510] == active_p4[510],
-                       "Higher half not identical to previous p4 (recursive mapping)");
+        tap.assert_tap(new_p4[0x1ff] == active_p4[0x1ff],
+                       "Higher half not identical to previous p4 (last entry)");
 
     }
 }
