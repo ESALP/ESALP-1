@@ -12,7 +12,7 @@ use multiboot2::ElfSection;
 use memory::Frame;
 
 /// A representation of a page table entry.
-#[derive(Clone,PartialEq,Debug)]
+#[derive(PartialEq,Debug)]
 pub struct Entry(u64);
 
 impl Entry {
@@ -44,6 +44,12 @@ impl Entry {
     pub fn set(&mut self, frame: Frame, flags: EntryFlags) {
         assert!(frame.start_address() & !0x000fffff_fffff000 == 0);
         self.0 = (frame.start_address() as u64) | flags.bits();
+    }
+
+    /// Clones the entry. Trait is not derived, as this could cause 
+    /// a double free.
+    pub fn clone(&self) -> Entry {
+        Entry(self.0)
     }
 }
 
