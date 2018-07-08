@@ -327,15 +327,6 @@ pub fn remap_the_kernel<FA>(active_table: &mut ActivePageTable,
         InactivePageTable::new(frame, &mut ACTIVE_TABLE.lock(), &mut temporary_page, false)
     };
 
-    //FIXME: for some reason the p3 at the 511th position 
-    //       in this original p4 is not recursively mapped correctly.
-    //       This code triggers that.
-    //
-    //serial_println!("About to try to map at 511th p4, 510th p3, 0th p2");
-    //let frame = allocator.allocate_frame().unwrap();
-    //let page = Page::containing_address(0xffffffff80101000);
-    //active_table.mapper.map_to(page, frame, EntryFlags::PRESENT, &mut allocator).expect("Unable to map sample page");
-
     active_table.with(&mut new_table, &mut temporary_page, |mapper| {
 
         let elf_sections_tag = boot_info.elf_sections_tag()
