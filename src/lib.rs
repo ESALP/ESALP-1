@@ -52,6 +52,7 @@ mod memory;
 /// Interrupts code
 // This must be pub to expose functions to the linker
 pub mod interrupts;
+mod process;
 mod sync;
 mod scheduler;
 /// Utilities for multi-CPU processing
@@ -77,6 +78,7 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) -> ! {
 
     let boot_info = unsafe { multiboot2::load(multiboot_info_address) };
 
+    let mut func_addr: usize = 0;
     for module in boot_info.module_tags() {
         println!("Module found: {}", module.name());
         if module.name() == "keyboard" {
@@ -86,7 +88,11 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) -> ! {
                     .change_kbmap(&*(addr as *const [u8; 128]));
             }
         }
+        if module.name() == "userprog" {
+            func_addr = module.start_address() as usize + memory::KERNEL_BASE;
+        }
     }
+    println!("Func start: {:x}",func_addr);
 
     // Initialize memory
     memory::init(&boot_info);
@@ -109,6 +115,12 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) -> ! {
         run_tests();
         shutdown();
     }
+
+    let func_pointer = func_addr as *const ();
+    let func: unsafe extern "C" fn() = unsafe {
+        core::mem::transmute(func_pointer)
+    };
+    unsafe { func() };
 
     loop {
         // We are waiting for interrupts here, so don't bother doing anything
