@@ -78,6 +78,7 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) -> ! {
     let boot_info = unsafe { multiboot2::load(multiboot_info_address) };
 
     for module in boot_info.module_tags() {
+        println!("Module found: {}", module.name());
         if module.name() == "keyboard" {
             let addr = module.start_address() as usize + memory::KERNEL_BASE;
             unsafe {

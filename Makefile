@@ -53,6 +53,9 @@ endif
 ifndef kbmap
 	kbmap := us
 endif
+ifndef userprog
+	userprog := crash
+endif
 
 binutils_prefix :=
 
@@ -75,11 +78,12 @@ test: $(iso)
 
 iso: $(iso)
 
-$(iso): $(kernel) build/arch/$(arch)/$(kbmap).bin $(grub_cfg)
+$(iso): $(kernel) build/arch/$(arch)/$(kbmap).bin build/arch/$(arch)/$(userprog).bin $(grub_cfg)
 	@mkdir -p build/isofiles/boot/grub
 	@cp $(kernel) build/isofiles/boot/kernel.bin
 	@cp $(grub_cfg) build/isofiles/boot/grub
 	@cp build/arch/$(arch)/$(kbmap).bin build/isofiles/boot/keyboard
+	@cp build/arch/$(arch)/$(userprog).bin build/isofiles/boot/userprog
 	@grub-mkrescue -o $(iso) build/isofiles 2> /dev/null
 	@rm -r build/isofiles
 	
@@ -95,6 +99,9 @@ $(rust_os): $(rust_source_files)
 
 # Keyboard maps
 build/arch/$(arch)/%.bin: $(module)/keyboard/%.asm
+	@nasm $< -o $@
+
+build/arch/$(arch)/%.bin: $(module)/userspace/%.asm
 	@nasm $< -o $@
 
 # compile assembly files
