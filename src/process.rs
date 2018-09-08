@@ -2,6 +2,9 @@
 use multiboot2::BootInformation;
 use ::memory::paging::entry::*;
 use ::memory::{Page, PageIter, KERNEL_BASE};
+use ::interrupts::TSS;
+
+const KERNEL_TSS_INDEX: usize = 0;
 
 fn get_userprog_address(boot_info: &BootInformation) (usize, usize) {
     for module in boot_info.module_tags() {
@@ -22,7 +25,6 @@ pub fn start_process(boot_info: &BootInformation) {
         stack_allocator: _,
     } = lock.as_mut().unwrap();
     // 1. Get the new page table running
-
 
     let mut temporary_page = 
         TemporaryPage::new(Page(0x9ff_ffff_fff), &mut allocator); // magic #
@@ -63,9 +65,17 @@ pub fn start_process(boot_info: &BootInformation) {
     let kernel_table = active_table.switch(user_table);
     temporary_page.consume(&mut frame_allocator);
 
-    // 3. Do something with scheduler?????
-    // 4. Set up the gdt / tss
+    // 4. add kernel stack to the tss
+    let process_stack = memory::alloc_stack(1);
+    let tss = TSS.lock();
+    tss.privilege_stack_table[KERNEL_TSS_INDEX] = process_stack;
 
     // 5. Transmute the memory and jump to the code
     //    - currently in the lib.rs file
+
+    let func_pointer = program_start as *const ();
+    let program: unsafe extern "C" fn() = unsafe {
+        core::mem::transmute(func_pointer);
+    }
+    unsafe { func() };
 }
