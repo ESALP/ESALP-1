@@ -130,7 +130,7 @@ pub fn init() {
 
     let double_fault_stack = memory::alloc_stack(1)
         .expect("Could not allocate double fault stack");
-    tss.interrupt_stack_table[DF_TSS_INDEX] =
+    tss.interrupt_stack_table[DF_TSS_INDEX as usize] =
         VirtualAddress(double_fault_stack.top());
 
     #[cfg(feature = "test")] {

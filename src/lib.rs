@@ -52,7 +52,6 @@ mod memory;
 /// Interrupts code
 // This must be pub to expose functions to the linker
 pub mod interrupts;
-mod process;
 mod sync;
 mod scheduler;
 mod process;
@@ -89,7 +88,6 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) -> ! {
             }
         }
     }
-    println!("Func start: {:x}",func_addr);
 
     // Initialize memory
     memory::init(&boot_info);
