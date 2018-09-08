@@ -9,17 +9,13 @@
 
 #![allow(non_snake_case)]
 
-#![feature(const_unsafe_cell_new)]
-#![feature(const_atomic_usize_new)]
-#![feature(const_unique_new)]
-
 #![feature(lang_items)]
 #![feature(alloc)]
-#![feature(const_fn, unique)]
+#![feature(const_fn)]
 #![feature(associated_type_defaults)]
 #![feature(asm, naked_functions, core_intrinsics)]
 #![feature(abi_x86_interrupt)]
-#![feature(panic_implementation)]
+#![feature(panic_handler)]
 #![feature(ptr_internals)]
 #![no_std]
 
@@ -147,16 +143,17 @@ pub extern "C" fn _Unwind_Resume() -> ! {
 pub extern "C" fn eh_personality() {}
 
 
+use core::alloc::Layout;
 /// Runs when the allocator is out of memory
 #[lang = "oom"]
 #[no_mangle]
-pub fn oom() -> ! {
+pub fn oom(_: Layout) -> ! {
     panic!("Error, out of memory");
 }
 
 /// Runs during a `panic!()`
 #[no_mangle]
-#[panic_implementation]
+#[panic_handler]
 pub extern "C" fn panic_fmt(pi: &core::panic::PanicInfo) -> ! {
     vga_buffer::change_color(vga_buffer::Color::Red, vga_buffer::Color::Black);
     println!("\n\nESALP {}", pi);
