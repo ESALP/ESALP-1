@@ -84,7 +84,7 @@ mod gdt;
 mod idt;
 /// Interrupt context handling in Rust
 #[macro_use]
-mod context;
+pub mod context;
 
 /// Enable Interrupts
 #[inline]
@@ -112,6 +112,7 @@ static IDT: IrqLock<Idt> = IrqLock::new(Idt::new());
 pub static PIC: Mutex<ChainedPICs> = Mutex::new(unsafe { ChainedPICs::new(0x20, 0x28) });
 
 const DF_TSS_INDEX: u16 = 0;
+const KERNEL_TSS_INDEX: u16 = 0;
 #[cfg(feature = "test")]
 const TEST_TSS_INDEX: u16 = 1;
 
@@ -119,26 +120,37 @@ pub const SLEEP_INT: u8 = 0x22;
 pub const EXIT_INT: u8 = 0x23;
 
 /// Static Task State Segment
-static TSS: IrqLock<TaskStateSegment> = IrqLock::new(TaskStateSegment::new());
+static TSS: Once<TaskStateSegment> = Once::new();
 /// Static Gdt
 static GDT: Once<Gdt> = Once::new();
 
 pub fn init() {
     // Set up the TSS
 
-    let tss = TSS.lock();
+    let tss = TSS.call_once(|| {
 
-    let double_fault_stack = memory::alloc_stack(1)
-        .expect("Could not allocate double fault stack");
-    tss.interrupt_stack_table[DF_TSS_INDEX as usize] =
-        VirtualAddress(double_fault_stack.top());
+        let mut tss = TaskStateSegment::new();
 
-    #[cfg(feature = "test")] {
-        let test_stack = memory::alloc_stack(1)
-            .expect("Could not allocate test stack");
-        tss.interrupt_stack_table[TEST_TSS_INDEX as usize] =
-            VirtualAddress(test_stack.top());
-    }
+        let double_fault_stack = memory::alloc_stack(1)
+            .expect("Could not allocate double fault stack");
+        tss.interrupt_stack_table[DF_TSS_INDEX as usize] =
+            VirtualAddress(double_fault_stack.top());
+
+        let userprog_kernel_stack = memory::alloc_stack(1)
+            .expect("Could not allocate user program stack");
+        tss.privilege_stack_table[KERNEL_TSS_INDEX as usize] = 
+            VirtualAddress(userprog_kernel_stack.top());
+
+        #[cfg(feature = "test")] {
+            let test_stack = memory::alloc_stack(1)
+                .expect("Could not allocate test stack");
+            tss.interrupt_stack_table[TEST_TSS_INDEX as usize] =
+                VirtualAddress(test_stack.top());
+        };
+
+        tss
+    });
+
 
     // Set up the GDT with a code segment and TSS segment and then load both
     // segments
@@ -151,8 +163,12 @@ pub fn init() {
         let mut gdt = gdt::Gdt::new();
         code_selector =
             gdt.add_entry(gdt::Descriptor::kernel_code_segment());
+        println!("KERNEL: {:?}", code_selector);
+        let user_sel = gdt.add_entry(gdt::Descriptor::user_code_segment());
         tss_selector =
             gdt.add_entry(gdt::Descriptor::tss_segment(&tss));
+        println!("{:?}", user_sel.0);
+        println!("{:?}", gdt.index);
         gdt
     });
     gdt.load();

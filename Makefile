@@ -54,7 +54,7 @@ ifndef kbmap
 	kbmap := us
 endif
 ifndef userprog
-	userprog := crash
+	userprog := mov
 endif
 
 binutils_prefix :=

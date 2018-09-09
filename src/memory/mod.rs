@@ -27,7 +27,7 @@ mod area_frame_allocator;
 /// Physical frame allocator that uses a bitmap.
 mod frame_bitmap;
 /// Virtual paging module.
-mod paging;
+pub mod paging;
 
 /// The kernel is linked to `KERNEL_BASE + 1M`
 pub const KERNEL_BASE: usize = 0xFFFF_FFFF_8000_0000;
@@ -143,11 +143,11 @@ pub fn init(boot_info: &BootInformation) {
 
 /// A representation of a physical frame.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Frame(usize);
+pub struct Frame(pub usize);
 
 impl Frame {
     /// Returns a `Frame` containing the PhysicalAddress given.
-    fn containing_address(address: PhysicalAddress) -> Frame {
+    pub fn containing_address(address: PhysicalAddress) -> Frame {
         Frame(address / PAGE_SIZE)
     }
 
@@ -172,9 +172,9 @@ impl Frame {
 }
 
 /// An iterator acrossed `Frame`s.
-struct FrameIter {
-    start: Frame,
-    end: Frame,
+pub struct FrameIter {
+    pub start: Frame,
+    pub end: Frame,
 }
 
 impl Iterator for FrameIter {

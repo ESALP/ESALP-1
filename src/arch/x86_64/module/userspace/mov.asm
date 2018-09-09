@@ -1,6 +1,6 @@
 	[BITS 64]
 	[ORG 0x00]
 section .text
-	global _start 
+	global _start
 _start:
-	cli
+	mov rax,12

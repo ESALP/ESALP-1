@@ -22,7 +22,7 @@ use memory::{MemoryController, MEMORY_CONTROLLER};
 use memory::frame_bitmap::FrameBitmap;
 
 /// An entry in the page table.
-mod entry;
+pub mod entry;
 /// Abstraction of the page table.
 mod table;
 /// A page to temporarily map a frame.
@@ -55,7 +55,7 @@ pub type VirtualAddress = usize;
 /// A representation of a virtual page.
 #[derive(Debug, Copy, Clone)]
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
-pub struct Page(usize);
+pub struct Page(pub usize);
 
 impl Page {
     /// Returns the first address in the `Page`
@@ -161,7 +161,7 @@ impl Add<usize> for Page {
 }
 
 /// Identity map the given `Frame`
-fn identity_map(frame: Frame, flags: EntryFlags) {
+pub fn identity_map(frame: Frame, flags: EntryFlags) {
         let page = Page::containing_address(frame.start_address());
         page.map_to(frame, flags);
 }
@@ -169,8 +169,8 @@ fn identity_map(frame: Frame, flags: EntryFlags) {
 /// An iterator across `Page`s
 #[derive(Clone)]
 pub struct PageIter {
-    start: Page,
-    end: Page,
+    pub start: Page,
+    pub end: Page,
 }
 
 impl Iterator for PageIter {

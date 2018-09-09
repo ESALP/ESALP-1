@@ -12,15 +12,22 @@ use x86_64::structures::tss::TaskStateSegment;
 use x86_64::structures::gdt::SegmentSelector;
 
 pub enum Descriptor {
-    UserSegment(u64),
+    UserSegment(u64, u16),
     SystemSegment(u64, u64),
 }
 
 impl Descriptor {
+
+    pub fn user_code_segment() -> Descriptor {
+        let flags = DescriptorFlags::USER_SEGMENT | DescriptorFlags::PRESENT |
+            DescriptorFlags::EXECUTABLE | DescriptorFlags::LONG_MODE;
+        Descriptor::UserSegment(flags.bits, 0b11)
+    }
+
     pub fn kernel_code_segment() -> Descriptor {
         let flags = DescriptorFlags::USER_SEGMENT | DescriptorFlags::PRESENT |
             DescriptorFlags::EXECUTABLE | DescriptorFlags::LONG_MODE;
-        Descriptor::UserSegment(flags.bits)
+        Descriptor::UserSegment(flags.bits, 0b0)
     }
 
     pub fn tss_segment(tss: &'static TaskStateSegment) -> Descriptor {
@@ -47,7 +54,7 @@ impl Descriptor {
 
 pub struct Gdt {
     table: [u64; 8],
-    index: usize,
+    pub index: usize,
 }
 
 impl Gdt {
@@ -84,15 +91,18 @@ impl Gdt {
     }
 
     pub fn add_entry(&mut self, entry: Descriptor) -> SegmentSelector {
-        let index = match entry {
-            Descriptor::UserSegment(value) => self.push(value),
+        match entry {
+            Descriptor::UserSegment(value, iopl) => {
+                let index = self.push(value);
+                SegmentSelector::new(index as u16, 
+                                     PrivilegeLevel::from_u16(iopl))
+            },
             Descriptor::SystemSegment(low, high) => {
                 let index = self.push(low);
                 self.push(high);
-                index
-            }
-        };
-        SegmentSelector::new(index as u16, PrivilegeLevel::Ring0)
+                SegmentSelector::new(index as u16, PrivilegeLevel::Ring0)
+            },
+        }
     }
 }
 
