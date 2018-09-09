@@ -105,7 +105,6 @@ pub fn enabled() -> bool {
 /// This is the Interrupt Descriptor Table that contains handlers for all
 /// interrupt vectors that we support. Each handler is set in its initialization
 /// and is not modified again.
-// FIXME make CPU local
 static IDT: IrqLock<Idt> = IrqLock::new(Idt::new());
 
 /// The Rust interface to the 8086 Programmable Interrupt Controller

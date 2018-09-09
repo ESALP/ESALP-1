@@ -19,6 +19,7 @@ use self::area_frame_allocator::AreaFrameAllocator;
 use self::frame_bitmap::FrameBitmap;
 use self::paging::PhysicalAddress;
 use self::paging::ActivePageTable;
+use memory::vmm::*;
 
 /// Allocator for stacks
 mod stack_allocator;
@@ -28,6 +29,8 @@ mod area_frame_allocator;
 mod frame_bitmap;
 /// Virtual paging module.
 mod paging;
+/// Virtual memory management
+mod vmm;
 
 /// The kernel is linked to `KERNEL_BASE + 1M`
 pub const KERNEL_BASE: usize = 0xFFFF_FFFF_8000_0000;
@@ -99,12 +102,9 @@ pub fn init(boot_info: &BootInformation) {
              boot_info.start_address() - KERNEL_BASE,
              boot_info.end_address() - KERNEL_BASE);
 
-    let heap_start_page = Page::containing_address(HEAP_START);
-    let heap_end_page = Page::containing_address(HEAP_START + HEAP_SIZE - 1);
-
     let mut active_table = unsafe {paging::ActivePageTable::new()};
 
-    let frame_allocator =
+    let mut frame_allocator =
         AreaFrameAllocator::new(kernel_start as usize,
                                 kernel_end as usize,
                                 boot_info.start_address() - KERNEL_BASE,
@@ -112,13 +112,24 @@ pub fn init(boot_info: &BootInformation) {
                                 boot_info,
                                 memory_map_tag.memory_areas());
 
-    let frame_bitmap =
-        paging::remap_the_kernel(&mut active_table, frame_allocator, boot_info);
+    let (old_p4, tmp_page) =
+        vm_init_preheap(&mut active_table, &mut frame_allocator, boot_info);
 
+    unsafe {
+        ::hole_list_allocator::init(HEAP_START, HEAP_SIZE);
+    }
+
+    let mut vmm = vm_init();
+
+    let mut frame_bitmap = FrameBitmap::new(frame_allocator, &mut active_table, &mut vmm);
+    tmp_page.consume(&mut frame_bitmap);
+    active_table.unmap(old_p4, &mut frame_bitmap);
+
+    // begone!
     let stack_allocator = {
-        let alloc_start = heap_end_page + 1;
+        let alloc_start = paging::Page::containing_address(HEAP_START+HEAP_SIZE)+1;
         let alloc_end = alloc_start + 100;
-        let alloc_range = Page::range_inclusive(alloc_start, alloc_end);
+        let alloc_range = paging::Page::range_inclusive(alloc_start, alloc_end);
 
         stack_allocator::StackAllocator::new(alloc_range)
     };
@@ -128,17 +139,6 @@ pub fn init(boot_info: &BootInformation) {
         frame_allocator: frame_bitmap,
         stack_allocator: stack_allocator,
     });
-
-    use self::paging::Page;
-    use hole_list_allocator;
-
-    for page in Page::range_inclusive(heap_start_page, heap_end_page) {
-        page.map(paging::EntryFlags::WRITABLE);
-    }
-
-    unsafe {
-        hole_list_allocator::init(HEAP_START, HEAP_SIZE);
-    }
 }
 
 /// A representation of a physical frame.

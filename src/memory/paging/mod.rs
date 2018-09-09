@@ -270,7 +270,7 @@ impl ActivePageTable {
 
 /// A level 4 table that is not yet used
 pub struct InactivePageTable {
-    p4_frame: Frame,
+    pub p4_frame: Frame,
 }
 
 impl InactivePageTable {
@@ -297,95 +297,6 @@ impl InactivePageTable {
 
         InactivePageTable { p4_frame: frame }
     }
-}
-
-/// Remaps the kernel using the given `ActivePageTable`
-///
-/// Each kernel section is mapped to the higher half with the correct permissions.
-/// This function also identity maps the VGA text buffer and maps the multiboot2
-/// information structure to the higher half.
-pub fn remap_the_kernel<FA>(active_table: &mut ActivePageTable,
-                            mut allocator: FA,
-                            boot_info: &BootInformation) -> FrameBitmap
-    where FA: FrameAllocate
-{
-    use memory::KERNEL_BASE;
-
-    // Create new inactive table using a temporary page
-    let mut temporary_page = 
-        TemporaryPage::new(Page(0xdeadbeef), &mut allocator);
-    let mut new_table = {
-        let frame = allocator.allocate_frame()
-            .expect("No more frames");
-        InactivePageTable::new(frame, &mut ACTIVE_TABLE.lock(), &mut temporary_page)
-    };
-
-    active_table.with(&mut new_table, &mut temporary_page, |mapper| {
-
-        let elf_sections_tag = boot_info.elf_sections_tag()
-            .expect("Memory map tag required");
-
-        let string_table = unsafe {
-            &*((elf_sections_tag.string_table() as *const StringTable).offset(KERNEL_BASE as isize))
-        };
-
-        // Map the allocated kernel sections to the higher half
-        for section in elf_sections_tag.sections() {
-            if !section.is_allocated() {
-                // Section is not loaded to memory
-                continue;
-            }
-            if string_table.section_name(&section) == ".init" {
-                // We do not map the init section because it is not
-                // used after boot
-                // FIXME do not leak these frames
-                continue;
-            }
-            assert!(section.addr as usize % PAGE_SIZE == 0,
-                    "Section needs to be page aligned");
-
-            let flags = EntryFlags::from_elf_section_flags(section);
-
-            let start_frame = Frame::containing_address(section.start_address() - KERNEL_BASE);
-            let end_frame = Frame::containing_address((section.end_address() - KERNEL_BASE) - 2);
-
-            for frame in Frame::range_inclusive(start_frame, end_frame) {
-                let new_page = Page::containing_address(frame.start_address() + KERNEL_BASE);
-                mapper.map_to(new_page, frame, flags, &mut allocator).expect("Unable to map elf section frame");
-            }
-        }
-
-        // Identity map the VGA buffer
-        let vga_buffer = Frame::containing_address(0xb8000);
-        mapper.identity_map(vga_buffer, EntryFlags::WRITABLE, &mut allocator);
-
-        // Map the multiboot info structure to the higher half
-        let multiboot_start = Frame::containing_address(boot_info.start_address() - KERNEL_BASE);
-        let multiboot_end = Frame::containing_address((boot_info.end_address() - KERNEL_BASE) - 1);
-
-        for frame in Frame::range_inclusive(multiboot_start, multiboot_end) {
-            let new_page = Page::containing_address(frame.start_address() + KERNEL_BASE);
-            // if we have already mapped this page, it must have been
-            // already mapped when we mapped the elf sections.
-            let _ = mapper.map_to(new_page, frame, EntryFlags::PRESENT, &mut allocator);
-        }
-    });
-    let old_table = active_table.switch(new_table);
-    println!("New page table loaded");
-
-    // Now, we're done allocating and need a struct with FrameDeallocate. Init
-    // the FrameBitmap
-    let mut frame_bitmap = FrameBitmap::new(allocator, active_table);
-
-    temporary_page.consume(&mut frame_bitmap);
-
-    // Use the previous table as a guard page for the kernel stack
-    let old_p4_page = Page::containing_address(old_table.p4_frame.start_address() + KERNEL_BASE);
-    active_table.unmap(old_p4_page, &mut frame_bitmap);
-
-    println!("New guard page at {:#x}", old_p4_page.start_address());
-
-    frame_bitmap
 }
 
 #[cfg(feature = "test")]

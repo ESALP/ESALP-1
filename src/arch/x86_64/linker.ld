@@ -27,23 +27,32 @@ SECTIONS {
 
 	.text ALIGN(4K) : AT(ADDR(.text) - KERNEL_BASE)
 	{
+		PROVIDE_HIDDEN(__code_start = .);
 		*(.text .text.*)
+		PROVIDE_HIDDEN(__code_end = .);
 	}
 
 	.data ALIGN(4K) : AT(ADDR(.data) - KERNEL_BASE)
 	{
+		PROVIDE_HIDDEN(__data_start = .);
 		*(.padata)
 		*(.data .data.* )
+		PROVIDE_HIDDEN(__data_end = .);
 	}
 
 	.bss ALIGN(4K) : AT(ADDR(.bss) - KERNEL_BASE)
 	{
+		PROVIDE_HIDDEN(__bss_start = .);
 		*(.bss .bss.*)
+		PROVIDE_HIDDEN(__bss_end = .);
 	}
 
 	.rodata ALIGN(4K) : AT(ADDR(.rodata) - KERNEL_BASE)
 	{
+		PROVIDE_HIDDEN(__rodata_start  = .);
 		*(.rodata .rodata.*)
+		*(.data.rel.ro.local*) *(.data.rel.ro .data.rel.ro.*)
+		PROVIDE_HIDDEN(__rodata_end = .);
 	}
 
 	.got ALIGN(4K) : AT(ADDR(.got) - KERNEL_BASE)
@@ -54,10 +63,6 @@ SECTIONS {
 	.got.plt ALIGN(4K) : AT(ADDR(.got.plt) - KERNEL_BASE)
 	{
 		*(.got.plt)
-	}
-	.data.rel.ro ALIGN(4K) : AT(ADDR(.data.rel.ro) - KERNEL_BASE)
-	{
-		*(.data.rel.ro.local*) *(.data.rel.ro .data.rel.ro.*)
 	}
 
 	.debug ALIGN(4K) : AT(ADDR(.debug) - KERNEL_BASE)

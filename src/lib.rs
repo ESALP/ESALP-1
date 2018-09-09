@@ -16,6 +16,8 @@
 #![feature(asm, naked_functions, core_intrinsics)]
 #![feature(abi_x86_interrupt)]
 #![feature(ptr_internals)]
+#![feature(linked_list_extras)]
+#![feature(const_raw_ptr_to_usize_cast)]
 #![no_std]
 
 // crates.io crates

@@ -162,6 +162,7 @@ pub struct ExceptionStackFrame {
     pub stack_pointer: usize,
     pub stack_segment: usize,
 }
+
 impl fmt::Debug for ExceptionStackFrame {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         struct Hex(usize);
