@@ -15,7 +15,6 @@
 #![feature(associated_type_defaults)]
 #![feature(asm, naked_functions, core_intrinsics)]
 #![feature(abi_x86_interrupt)]
-#![feature(panic_handler)]
 #![feature(ptr_internals)]
 #![no_std]
 
@@ -45,8 +44,7 @@ mod vga_buffer;
 /// Memory management
 mod memory;
 /// Interrupts code
-// This must be pub to expose functions to the linker
-pub mod interrupts;
+mod interrupts;
 /// IO abstractions in Rust
 #[macro_use]
 mod cpuio;
@@ -123,7 +121,7 @@ fn shutdown() -> ! {
 
 
 #[cfg(feature = "test")]
-pub fn run_tests() {
+fn run_tests() {
     memory::tests::run();
     scheduler::tests::run();
     smp::tests::run();
@@ -139,22 +137,19 @@ pub extern "C" fn _Unwind_Resume() -> ! {
 
 /// Used for unwinding, unsupported
 #[lang = "eh_personality"]
-#[no_mangle]
-pub extern "C" fn eh_personality() {}
+fn eh_personality() {}
 
 
 use core::alloc::Layout;
 /// Runs when the allocator is out of memory
 #[lang = "oom"]
-#[no_mangle]
-pub fn oom(_: Layout) -> ! {
+fn oom(_: Layout) -> ! {
     panic!("Error, out of memory");
 }
 
 /// Runs during a `panic!()`
-#[no_mangle]
 #[panic_handler]
-pub extern "C" fn panic_fmt(pi: &core::panic::PanicInfo) -> ! {
+extern "C" fn panic_fmt(pi: &core::panic::PanicInfo) -> ! {
     vga_buffer::change_color(vga_buffer::Color::Red, vga_buffer::Color::Black);
     println!("\n\nESALP {}", pi);
 

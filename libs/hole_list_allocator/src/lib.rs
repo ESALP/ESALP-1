@@ -7,14 +7,13 @@
 // This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(const_fn, global_allocator)]
-
 #![no_std]
 
 extern crate linked_list_allocator;
 
 use linked_list_allocator::LockedHeap;
 
+// TODO use own mutex instead of spinlock in `LockedHeap`
 #[global_allocator]
 static ALLOCATOR: LockedHeap = LockedHeap::empty();
 

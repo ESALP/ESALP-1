@@ -109,7 +109,7 @@ pub fn enabled() -> bool {
 static IDT: IrqLock<Idt> = IrqLock::new(Idt::new());
 
 /// The Rust interface to the 8086 Programmable Interrupt Controller
-pub static PIC: Mutex<ChainedPICs> = Mutex::new(unsafe { ChainedPICs::new(0x20, 0x28) });
+static PIC: Mutex<ChainedPICs> = Mutex::new(unsafe { ChainedPICs::new(0x20, 0x28) });
 
 const DF_TSS_INDEX: u16 = 0;
 #[cfg(feature = "test")]
