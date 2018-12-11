@@ -11,7 +11,7 @@
 //!
 //! Round robin scheduler and threading
 
-use alloc::collections::vec_deque::VecDeque;
+use alloc::collections::VecDeque;
 
 use interrupts::{Context, SLEEP_INT};
 use smp::current;
