@@ -10,27 +10,37 @@
 use multiboot2::BootInformation;
 use spin::Mutex;
 
+use core::mem::MaybeUninit;
 use alloc::collections::linked_list::LinkedList;
-use memory::paging::{ActivePageTable, InactivePageTable};
-use memory::paging::{EntryFlags, Page};
-use memory::paging::TemporaryPage;
-use super::{KERNEL_BASE, Frame, FrameAllocate};
-use super::{HEAP_START, HEAP_SIZE};
+
+use memory::ArchSpecificVMM;
+use memory::{arch_vmm_init_preheap, arch_vmm_init};
+use memory::{arch_map_to, arch_map, arch_unmap};
+use memory::arch_alloc_stack;
+use memory::{HEAP_START, HEAP_SIZE};
+use memory::Stack;
+
+// TODO export from arch
+type vaddr = usize;
+type paddr = usize;
 
 // Entire higher half
-const KERNEL_SPACE_START: usize = 0xffff_8000_0000_0000;
-const KERNEL_SPACE_END: usize = 0xffff_ffff_ffff_ffff;
+const KERNEL_SPACE_START: vaddr = 0xffff_8000_0000_0000;
+const KERNEL_SPACE_END: vaddr = 0xffff_ffff_ffff_ffff;
+
+static KERNEL_VMM: Mutex<MaybeUninit<VMM>> = Mutex::new(MaybeUninit::uninitialized());
 
 extern {
-    static __code_start: usize;
-    static __code_end: usize;
-    static __bss_start: usize;
-    static __bss_end: usize;
-    static __data_start: usize;
-    static __data_end: usize;
-    static __rodata_start: usize;
-    static __rodata_end: usize;
+    static __code_start: vaddr;
+    static __code_end: vaddr;
+    static __bss_start: vaddr;
+    static __bss_end: vaddr;
+    static __data_start: vaddr;
+    static __data_end: vaddr;
+    static __rodata_start: vaddr;
+    static __rodata_end: vaddr;
 }
+
 /// Get the real value of a symbol
 macro_rules! symbol_val {
     ($sym:expr) => {{
@@ -38,7 +48,8 @@ macro_rules! symbol_val {
     }}
 }
 
-fn early_regions() -> [Region; 6] {
+// Perhaps move to arch
+pub(super) fn early_regions() -> [Region; 6] {
     unsafe { [
         // kernel
         Region {
@@ -82,92 +93,96 @@ fn early_regions() -> [Region; 6] {
     ]}
 }
 
-/// Create a new `VMM`. The heap must be init at this point!
-pub fn vm_init_preheap<FA>(active_table: &mut ActivePageTable, allocator: &mut FA,
-            boot_info: &BootInformation) -> (Page, TemporaryPage)
-        where FA: FrameAllocate
-{
-    assert_has_not_been_called!("vmm::vm_init_preheap must only be called once!");
-
-
-    // x64 specific construction
-    // TODO remove
-    // Create new inactive table using a temporary page
-    let mut temporary_page =
-        TemporaryPage::new(Page::containing_address(0xdeadbeef), allocator);
-    let mut new_table = {
-        let frame = allocator.allocate_frame()
-            .expect("No more frames");
-        InactivePageTable::new(frame, active_table, &mut temporary_page)
-    };
-
-    active_table.with(&mut new_table, &mut temporary_page, |mapper| {
-        for region in early_regions().iter() {
-            // construct flags from region flags
-            // All kernel sections are global
-            let mut flags = EntryFlags::GLOBAL;
-            if !region.protection.contains(Protection::EXECUTABLE) {
-                flags |= EntryFlags::NO_EXECUTE;
-            } if region.protection.contains(Protection::WRITABLE) {
-                flags |= EntryFlags::WRITABLE;
-            }
-            let diff = if region.start > KERNEL_BASE {
-                KERNEL_BASE
-            } else {
-                0
-            };
-
-            let start_frame = Frame::containing_address(region.start - diff);
-            let end_frame = Frame::containing_address((region.end - diff) - 2);
-
-            for frame in Frame::range_inclusive(start_frame, end_frame) {
-                let new_page = Page::containing_address(frame.start_address() + diff);
-                mapper.map_to(new_page, frame, flags, allocator)
-                    .expect("Unable to map initial kernel section");
-            }
-        }
-        // map the multiboot info section. TODO: remove
-        let multiboot_start = Frame::containing_address(boot_info.start_address() - KERNEL_BASE);
-        let multiboot_end = Frame::containing_address((boot_info.end_address() - KERNEL_BASE) - 1);
-
-        for frame in Frame::range_inclusive(multiboot_start, multiboot_end) {
-            let new_page = Page::containing_address(frame.start_address() + KERNEL_BASE);
-            // if we have already mapped this page, it must have been
-            // already mapped when we mapped the elf sections.
-            let _ = mapper.map_to(new_page, frame, EntryFlags::PRESENT, allocator);
-        }
-    });
-    let old_table = active_table.switch(new_table);
-    println!("New page table loaded");
-    let old_p4_page = Page::containing_address(old_table.p4_frame.start_address() + KERNEL_BASE);
-
-    (old_p4_page, temporary_page)
-}
-
-pub fn vm_init() -> VMM{
+/// Initialize virtual memory
+pub fn vm_init(boot_info: &BootInformation) {
     assert_has_not_been_called!("vmm::vm_init must only be called once!");
+
+    let arch_specific = arch_vmm_init_preheap(boot_info, &early_regions());
     // heap works at this point
     let mut vmm = VMM {
         start: KERNEL_SPACE_START,
         regions: LinkedList::new(),
+        arch_specific: arch_specific,
         end: KERNEL_SPACE_END,
     };
-    println!("Entered vm late");
-
+    //add basic regions
     for region in early_regions().iter() {
         println!("region: {:x?}", region);
         assert!(vmm.insert(*region));
     }
+    //add arch specific regions
+    arch_vmm_init(&mut vmm);
 
-    println!("Exited vm late");
-    vmm
+    KERNEL_VMM.lock().set(vmm);
+}
+
+pub enum VmmError {
+    MemUsed,
+    PhysMemUsed,
+    OOM
+}
+
+/// Map `region` to the paddr `start_address` or return an error
+pub fn map_to(region: Region, start_address: paddr) -> Result<(),VmmError> {
+    let mut vmm_lock = KERNEL_VMM.lock();
+    let vmm = unsafe { vmm_lock.get_mut() };
+    if !vmm.insert(region) {
+        return Err(VmmError::MemUsed);
+    }
+    if let Err(E) = arch_map_to(&mut vmm.arch_specific, region, start_address) {
+        vmm.remove_region(region.start);
+        return Err(E)
+    }
+    Ok(())
+}
+
+/// Map `region` or return an error
+pub fn map(region: Region) -> Result<(),VmmError> {
+    let mut vmm_lock = KERNEL_VMM.lock();
+    let vmm = unsafe { vmm_lock.get_mut() };
+
+    if !vmm.insert(region) {
+        return Err(VmmError::MemUsed);
+    }
+    if let Err(E) = arch_map(&mut vmm.arch_specific, region) {
+        vmm.remove_region(region.start);
+        return Err(E)
+    }
+    Ok(())
+}
+
+/// Unmap the region associated with `addr`
+/// Returns `true` iff a region was unmapped
+// TODO make it posssible to unmap a region
+pub fn unmap(addr: vaddr) -> bool {
+    let mut vmm_lock = KERNEL_VMM.lock();
+    let vmm = unsafe { vmm_lock.get_mut() };
+
+    if let Some(region) = vmm.remove_region(addr) {
+        arch_unmap(&mut vmm.arch_specific, region);
+        true
+    } else {
+        false
+    }
+}
+
+/// Allocates a stack of `size` pages
+// TODO fix stacks
+pub fn alloc_stack(size: usize) -> Result<Stack, &'static str> {
+    let mut vmm_lock = KERNEL_VMM.lock();
+    let vmm = unsafe { vmm_lock.get_mut() };
+
+    // TODO rewrite and remove arch specific
+    arch_alloc_stack(&mut vmm.arch_specific, size)
 }
 
 pub struct VMM {
-    start: usize,
+    start: vaddr,
     regions: LinkedList<Region>,
     //table: InactivePageTable,
-    end: usize,
+    // TODO make pub(arch mem)
+    pub(super) arch_specific: ArchSpecificVMM,
+    end: vaddr,
 }
 
 impl VMM {
@@ -185,7 +200,7 @@ impl VMM {
                     RegionOrder::Greater => break,
                     RegionOrder::Intersects => return false,
                 }
-            }else {
+            } else {
                 break;
             }
             iter.next();
@@ -195,16 +210,18 @@ impl VMM {
     }
 
    /// Returns the region that contains `address`, if it exits
-   pub fn containing_region(&self, address: usize) -> Option<Region> {
-       for region in &self.regions {
-           if region.start > address {
-               return None;
-            }
-           if region.end > address {
-               return Some(*region);
-           }
-       }
-       return None;
+   pub fn containing_region(&self, address: vaddr) -> Option<Region> {
+       self.regions.iter().filter(|region| region.contains(address))
+           // should contain /at most/ one region
+           .next().cloned()
+   }
+
+   /// Remove the region intersecting with `address`
+   pub fn remove_region(&mut self, address: usize) -> Option<Region>
+   {
+       self.regions.drain_filter(|region| region.contains(address))
+           // should contain /at most/ one region
+           .next()
    }
 }
 
@@ -212,19 +229,19 @@ impl VMM {
 #[derive(Debug)]
 pub struct Region {
     name: &'static str,
-    start: usize,
-    end: usize,
-    // protections
-    protection: Protection,
+    pub start: vaddr,
+    pub end: vaddr,
+    pub(super) protection: Protection,
 }
 
 bitflags! {
     /// Flags that are used in the entry.
-    pub struct Protection: u64 {
-        const NONE =            0 << 0;
-        const WRITABLE =        1 << 1;
-        const USER_ACCESSIBLE = 1 << 2;
-        const EXECUTABLE =      1 << 3;
+    pub struct Protection: usize {
+        const NONE            = 0;
+        const WRITABLE        = 1 << 0;
+        const USER_ACCESSIBLE = 1 << 1;
+        const EXECUTABLE      = 1 << 2;
+        // TODO COW
     }
 }
 
@@ -236,13 +253,17 @@ enum RegionOrder {
 }
 
 impl Region {
-    pub fn new(name: &'static str, start: usize, end: usize, protection: Protection) -> Region {
+    pub fn new(name: &'static str, start: vaddr, end: vaddr, protection: Protection) -> Region {
         Region {
             name: name,
             start: start,
             end: end,
             protection: protection,
         }
+    }
+
+    fn contains(&self, addr: vaddr) -> bool {
+        addr >= self.start && addr <= self.end
     }
 
     /// Returns true iff the regions intersect
@@ -260,4 +281,7 @@ impl Region {
         }
     }
 
+    // TODO unmap
+    //fn difference(self, other: &Self) -> Option<(Region,Option<Region>)> {
+    //}
 }

@@ -17,7 +17,7 @@ pub use self::entry::*;
 pub use self::mapper::Mapper;
 pub use self::temporary_page::{TemporaryPage, TinyAllocator};
 use memory::{PAGE_SIZE, Frame, FrameAllocate};
-use memory::{MemoryController, MEMORY_CONTROLLER};
+//use memory::{MemoryController, MEMORY_CONTROLLER};
 
 use memory::frame_bitmap::FrameBitmap;
 
@@ -112,44 +112,44 @@ impl Page {
         }
     }
 
-    /// Map this `Page` to the given `Frame`
-    pub fn map_to(self, frame: Frame, flags: EntryFlags) {
-        let mut lock = MEMORY_CONTROLLER.lock();
-        let &mut MemoryController {
-            ref mut active_table,
-            ref mut frame_allocator,
-            stack_allocator: _,
-        } = lock.as_mut().unwrap();
-        active_table.map_to(self, frame, flags, frame_allocator)
-            .expect("Unable to map frame because page is already taken");
-    }
+    ///// Map this `Page` to the given `Frame`
+    //pub fn map_to(self, frame: Frame, flags: EntryFlags) {
+    //    let mut lock = MEMORY_CONTROLLER.lock();
+    //    let &mut MemoryController {
+    //        ref mut active_table,
+    //        ref mut frame_allocator,
+    //        stack_allocator: _,
+    //    } = lock.as_mut().unwrap();
+    //    active_table.map_to(self, frame, flags, frame_allocator)
+    //        .expect("Unable to map frame because page is already taken");
+    //}
 
-    /// Map this `Page` to any availible `Frame`.
-    ///
-    /// # Panics
-    /// Panics if OOM
-    pub fn map(self, flags: EntryFlags) {
-        let mut lock = MEMORY_CONTROLLER.lock();
-        let &mut MemoryController {
-            ref mut active_table,
-            ref mut frame_allocator,
-            stack_allocator: _,
-        } = lock.as_mut().unwrap();
-        active_table.map(self, flags, frame_allocator);
+    ///// Map this `Page` to any availible `Frame`.
+    /////
+    ///// # Panics
+    ///// Panics if OOM
+    //pub fn map(self, flags: EntryFlags) {
+    //    let mut lock = MEMORY_CONTROLLER.lock();
+    //    let &mut MemoryController {
+    //        ref mut active_table,
+    //        ref mut frame_allocator,
+    //        stack_allocator: _,
+    //    } = lock.as_mut().unwrap();
+    //    active_table.map(self, flags, frame_allocator);
 
-    }
+    //}
 
-    /// Unmap this `Page`
-    pub fn unmap(self) {
-        let mut lock = MEMORY_CONTROLLER.lock();
-        let &mut MemoryController {
-            ref mut active_table,
-            ref mut frame_allocator,
-            stack_allocator: _,
-        } = lock.as_mut().unwrap();
+    ///// Unmap this `Page`
+    //pub fn unmap(self) {
+    //    let mut lock = MEMORY_CONTROLLER.lock();
+    //    let &mut MemoryController {
+    //        ref mut active_table,
+    //        ref mut frame_allocator,
+    //        stack_allocator: _,
+    //    } = lock.as_mut().unwrap();
 
-        active_table.unmap(self, frame_allocator);
-    }
+    //    active_table.unmap(self, frame_allocator);
+    //}
 }
 
 impl Add<usize> for Page {
@@ -160,11 +160,11 @@ impl Add<usize> for Page {
     }
 }
 
-/// Identity map the given `Frame`
-fn identity_map(frame: Frame, flags: EntryFlags) {
-        let page = Page::containing_address(frame.start_address());
-        page.map_to(frame, flags);
-}
+///// Identity map the given `Frame`
+//fn identity_map(frame: Frame, flags: EntryFlags) {
+//        let page = Page::containing_address(frame.start_address());
+//        page.map_to(frame, flags);
+//}
 
 /// An iterator across `Page`s
 #[derive(Clone)]
@@ -299,6 +299,8 @@ impl InactivePageTable {
     }
 }
 
+/*
+TODO rewrite memory tests
 #[cfg(feature = "test")]
 pub mod tests {
 
@@ -354,5 +356,4 @@ pub mod tests {
         tap.assert_tap(active_table.mapper.translate(addr).is_none(), 
                        "Did non successfully unmap test page (12th P3)");
     }
-
-}
+}*/

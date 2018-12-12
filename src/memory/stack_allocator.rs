@@ -93,8 +93,9 @@ impl StackAllocator {
 impl Drop for Stack {
     /// Free the `Stack`'s pages back to the PMM
     fn drop(&mut self) {
-        Page::range_inclusive(Page::containing_address(self.top),
-                              Page::containing_address(self.bottom))
-            .for_each(|x| x.unmap());
+        // TODO unmap pages
+        //Page::range_inclusive(Page::containing_address(self.top),
+        //                      Page::containing_address(self.bottom))
+        //    .for_each(|x| x.unmap());
     }
 }

@@ -13,7 +13,7 @@ use core::mem::size_of;
 use memory::{Frame, FrameAllocate, FrameDeallocate};
 use memory::paging::{self, Page, VirtualAddress};
 use memory::paging::ActivePageTable;
-use memory::vmm::{Region, VMM, Protection};
+use memory::vmm::{Region, Protection};
 
 use rlibc;
 use memory::PAGE_SIZE;
@@ -55,7 +55,7 @@ impl FrameBitmap {
     /// to place in the bitmap. The FrameBitmap does not allocate ever after
     /// this function completes, therefore it can be used safely in conjunction
     /// with an ActivePageTable.
-    pub fn new<FA>(mut allocator: FA, page_table: &mut ActivePageTable, vmm: &mut VMM) -> FrameBitmap
+    pub fn new<FA>(mut allocator: FA, page_table: &mut ActivePageTable) -> FrameBitmap
         where FA: FrameAllocate
     {
         // Set bitmap start to 0o177777_777_777_000_000_0000, right above the
@@ -109,17 +109,18 @@ impl FrameBitmap {
                 *addr |= entry;
             }
         }
-        // Now update the VMM
-        let end_address = unsafe {
-            bitmap.bottom.as_ptr().offset(bitmap.size as isize) as usize
-        };
-        let frame_bitmap_region = Region::new("Bitmap", bitmap.bottom.as_ptr() as usize,
-            end_address, Protection::WRITABLE);
-        assert!(vmm.insert(frame_bitmap_region));
-
         bitmap
     }
+    pub fn vm_region(&self) -> Region {
+        // Now update the VMM
+        let end_address = unsafe {
+            self.bottom.as_ptr().offset(self.size as isize) as usize
+        };
+        return Region::new("Bitmap", self.bottom.as_ptr() as usize,
+            end_address, Protection::WRITABLE);
+    }
 }
+
 
 impl FrameAllocate for FrameBitmap {
     fn allocate_frame(&mut self) -> Option<Frame> {

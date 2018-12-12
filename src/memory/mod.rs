@@ -9,8 +9,6 @@
 
 #![allow(dead_code,unused_variables)]
 
-use spin::Mutex;
-
 use multiboot2::BootInformation;
 
 pub use self::stack_allocator::Stack;
@@ -18,8 +16,10 @@ pub use self::stack_allocator::Stack;
 use self::area_frame_allocator::AreaFrameAllocator;
 use self::frame_bitmap::FrameBitmap;
 use self::paging::PhysicalAddress;
-use self::paging::ActivePageTable;
-use memory::vmm::*;
+use self::paging::TemporaryPage;
+use self::paging::{ActivePageTable, InactivePageTable};
+use self::paging::{EntryFlags, Page};
+pub use self::vmm::*;
 
 /// Allocator for stacks
 mod stack_allocator;
@@ -44,28 +44,72 @@ const HEAP_START: usize = 0o000_001_000_0000;
 const HEAP_SIZE: usize = 25 * PAGE_SIZE;
 
 /// A struct that gives access to the physical and virtual memory managers.
-struct MemoryController {
+struct ArchSpecificVMM {
     active_table:ActivePageTable,
     frame_allocator: FrameBitmap,
     stack_allocator: stack_allocator::StackAllocator,
 }
 
-/// A static `MemoryController`. Will always be Some(_) after init completes.
-static MEMORY_CONTROLLER: Mutex<Option<MemoryController>> = Mutex::new(None);
 
+/// Map each region in `regions` to the higher half and return the old containing page of the `p4`
+/// table.
+fn map_regions_early<FA>(regions: &[Region], active_table: &mut ActivePageTable,
+                   allocator: &mut FA, boot_info: &BootInformation) -> (Page, TemporaryPage)
+        where FA: FrameAllocate
+{
+    // Create new inactive table using a temporary page
+    let mut temporary_page =
+        TemporaryPage::new(Page::containing_address(0xdeadbeef), allocator);
+    let mut new_table = {
+        let frame = allocator.allocate_frame()
+            .expect("No more frames");
+        InactivePageTable::new(frame, active_table, &mut temporary_page)
+    };
 
-/// Allocates a stack of `size` pages
-pub fn alloc_stack(size: usize) -> Result<Stack, &'static str> {
-    let mut lock = MEMORY_CONTROLLER.lock();
-    let &mut MemoryController {
-        ref mut active_table,
-        ref mut frame_allocator,
-        ref mut stack_allocator,
-    } = lock.as_mut().unwrap();
+    active_table.with(&mut new_table, &mut temporary_page, |mapper| {
+        for region in regions.iter() {
+            // construct flags from region flags
+            // All kernel sections are global
+            let flags = EntryFlags::from_protection(region.protection);
 
-    stack_allocator.alloc_stack(active_table,
-                                frame_allocator,
-                                size)
+            let diff = if region.start > KERNEL_BASE {
+                KERNEL_BASE
+            } else {
+                0
+            };
+
+            let start_frame = Frame::containing_address(region.start - diff);
+            let end_frame = Frame::containing_address((region.end - diff) - 2);
+
+            for frame in Frame::range_inclusive(start_frame, end_frame) {
+                let new_page = Page::containing_address(frame.start_address() + diff);
+                mapper.map_to(new_page, frame, flags, allocator)
+                    .expect("Unable to map initial kernel section");
+            }
+        }
+        // map the multiboot info section. TODO: remove
+        let multiboot_start = Frame::containing_address(boot_info.start_address() - KERNEL_BASE);
+        let multiboot_end = Frame::containing_address((boot_info.end_address() - KERNEL_BASE) - 1);
+
+        for frame in Frame::range_inclusive(multiboot_start, multiboot_end) {
+            let new_page = Page::containing_address(frame.start_address() + KERNEL_BASE);
+            // if we have already mapped this page, it must have been
+            // already mapped when we mapped the elf sections.
+            let _ = mapper.map_to(new_page, frame, EntryFlags::PRESENT, allocator);
+        }
+    });
+    let old_table = active_table.switch(new_table);
+    println!("New page table loaded");
+    let old_p4_page = Page::containing_address(old_table.p4_frame.start_address() + KERNEL_BASE);
+
+    (old_p4_page, temporary_page)
+}
+
+fn region_range(region: Region) -> paging::PageIter
+{
+    Page::range_inclusive(
+        Page::containing_address(region.start),
+        Page::containing_address(region.end))
 }
 
 /// Initializes memory to a defined state.
@@ -73,10 +117,7 @@ pub fn alloc_stack(size: usize) -> Result<Stack, &'static str> {
 /// It first finds, and prints out, the kernel start and finish. Then it
 /// remaps the kernel using correct permissions and finally allocates a
 /// space for and initializes the kernel heap
-pub fn init(boot_info: &BootInformation) {
-    // For this function to be safe, it must only be called once.
-    assert_has_not_been_called!("memory::init must only be called once!");
-
+fn arch_vmm_init_preheap(boot_info: &BootInformation, regions: &[Region]) -> ArchSpecificVMM {
     let memory_map_tag = boot_info.memory_map_tag()
         .expect("Memory map tag required");
     let elf_sections_tag = boot_info.elf_sections_tag()
@@ -113,15 +154,13 @@ pub fn init(boot_info: &BootInformation) {
                                 memory_map_tag.memory_areas());
 
     let (old_p4, tmp_page) =
-        vm_init_preheap(&mut active_table, &mut frame_allocator, boot_info);
+        map_regions_early(regions, &mut active_table, &mut frame_allocator, boot_info);
 
     unsafe {
         ::hole_list_allocator::init(HEAP_START, HEAP_SIZE);
     }
 
-    let mut vmm = vm_init();
-
-    let mut frame_bitmap = FrameBitmap::new(frame_allocator, &mut active_table, &mut vmm);
+    let mut frame_bitmap = FrameBitmap::new(frame_allocator, &mut active_table);
     tmp_page.consume(&mut frame_bitmap);
     active_table.unmap(old_p4, &mut frame_bitmap);
 
@@ -134,11 +173,84 @@ pub fn init(boot_info: &BootInformation) {
         stack_allocator::StackAllocator::new(alloc_range)
     };
 
-    *MEMORY_CONTROLLER.lock() = Some(MemoryController {
+    ArchSpecificVMM {
         active_table: active_table,
         frame_allocator: frame_bitmap,
         stack_allocator: stack_allocator,
-    });
+    }
+}
+
+fn arch_vmm_init(vmm: &mut VMM) {
+    let region = vmm.arch_specific.frame_allocator.vm_region();
+    vmm.insert(region);
+}
+
+use self::vmm::VmmError;
+fn arch_map_to(arch_specific: &mut ArchSpecificVMM, region: Region, start_address: usize)
+    -> Result<(),VmmError>
+{
+    let &mut ArchSpecificVMM {
+        ref mut active_table,
+        ref mut frame_allocator,
+        ref mut stack_allocator,
+    } = arch_specific;
+    let flags = EntryFlags::from_protection(region.protection);
+    if !region_range(region)
+            .all(|page| active_table.is_allocated(page)) {
+        return Err(VmmError::MemUsed);
+    }
+
+    for page in region_range(region) {
+        let frame_start = start_address + (page.start_address() - region.start);
+        let frame = Frame::containing_address(frame_start);
+        assert!(active_table.map_to(page, frame, flags, frame_allocator).is_ok());
+    }
+    Ok(())
+}
+fn arch_map(arch_specific: &mut ArchSpecificVMM, region: Region)
+    -> Result<(),VmmError>
+{
+    let &mut ArchSpecificVMM {
+        ref mut active_table,
+        ref mut frame_allocator,
+        ref mut stack_allocator,
+    } = arch_specific;
+    let flags = EntryFlags::from_protection(region.protection);
+    if !region_range(region)
+            .all(|page| active_table.is_allocated(page)) {
+        return Err(VmmError::MemUsed);
+    }
+
+    for page in region_range(region) {
+        active_table.map(page, flags, frame_allocator);
+    }
+    Ok(())
+}
+
+fn arch_unmap(arch_specific: &mut ArchSpecificVMM, region: Region)
+    -> Result<(), VmmError>
+{
+    let &mut ArchSpecificVMM {
+        ref mut active_table,
+        ref mut frame_allocator,
+        ref mut stack_allocator,
+    } = arch_specific;
+    for page in region_range(region) {
+        active_table.unmap(page, frame_allocator);
+    }
+    Ok(())
+}
+
+fn arch_alloc_stack(arch_specific: &mut ArchSpecificVMM, size: usize)
+    -> Result<Stack, &'static str>
+{
+    let &mut ArchSpecificVMM {
+        ref mut active_table,
+        ref mut frame_allocator,
+        ref mut stack_allocator,
+    } = arch_specific;
+
+    stack_allocator.alloc_stack(active_table, frame_allocator, size)
 }
 
 /// A representation of a physical frame.
@@ -206,7 +318,7 @@ pub mod tests {
     pub fn run() {
         // run the tests
         test_memory_alloc();
-        super::paging::tests::run();
+        //super::paging::tests::run();
     }
 
     fn test_memory_alloc() {

@@ -13,6 +13,8 @@
 #![feature(alloc)]
 #![feature(const_fn)]
 #![feature(associated_type_defaults)]
+#![feature(drain_filter)]
+#![feature(maybe_uninit)]
 #![feature(asm, naked_functions, core_intrinsics)]
 #![feature(abi_x86_interrupt)]
 #![feature(ptr_internals)]
@@ -86,7 +88,7 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) -> ! {
     }
 
     // Initialize memory
-    memory::init(&boot_info);
+    memory::vm_init(&boot_info);
 
     // Initialize CPU local variables and the scheduler
     unsafe {

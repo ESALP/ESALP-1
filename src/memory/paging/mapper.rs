@@ -85,6 +85,10 @@ impl Mapper {
             .or_else(huge_page)
     }
 
+    pub fn is_allocated(&self, page: Page) -> bool {
+        self.translate_page(page).is_some()
+    }
+
     /// Maps the page to the frame with the provided flags
     /// The `PRESENT` flag is set by default. Needs an allocator as it might
     /// need to create new page tables
@@ -125,6 +129,8 @@ impl Mapper {
 
     /// Unmaps the given page and adds all freed frames to the
     /// given allocator
+    // FIXME currently this deallocates the allocated frame but nothing else.
+    // we probably want the opposite!
     pub fn unmap<A>(&mut self, page: Page, allocator: &mut A)
         where A: FrameDeallocate
     {
