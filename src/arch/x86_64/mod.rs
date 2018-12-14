@@ -8,3 +8,12 @@
 // except according to those terms.
 
 pub mod mem;
+
+#[cfg(feature = "test")]
+pub mod tests {
+    use tap::TestGroup;
+
+    pub fn run() {
+        super::mem::tests::run();
+    }
+}

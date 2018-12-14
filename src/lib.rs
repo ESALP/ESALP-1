@@ -141,6 +141,7 @@ fn shutdown() -> ! {
 
 #[cfg(feature = "test")]
 fn run_tests() {
+    arch::tests::run();
     vmm::tests::run();
     scheduler::tests::run();
     smp::tests::run();
