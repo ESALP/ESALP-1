@@ -8,7 +8,7 @@
 // except according to those terms.
 
 use interrupts::{Context, EXIT_INT};
-use memory::{alloc_stack, Stack};
+use vmm::{alloc_stack, Stack};
 use core::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
 use core::mem;
 

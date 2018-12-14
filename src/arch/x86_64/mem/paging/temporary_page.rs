@@ -9,7 +9,7 @@
 
 use super::{Page, ActivePageTable, VirtualAddress, EntryFlags};
 use super::table::{Table, Level1};
-use memory::{Frame, FrameAllocate, FrameDeallocate};
+use arch::mem::{Frame, FrameAllocate, FrameDeallocate};
 
 /// A page to temporarily map a frame.
 #[must_use = "The TemporaryPage must be consumed at the end of its lifetime"]

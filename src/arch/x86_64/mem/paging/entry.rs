@@ -8,9 +8,9 @@
 // except according to those terms.
 
 use multiboot2::ElfSection;
-use memory::vmm::Protection;
+use vmm::Protection;
 
-use memory::Frame;
+use arch::mem::Frame;
 
 /// A representation of a page table entry.
 pub struct Entry(u64);
@@ -99,7 +99,7 @@ impl EntryFlags {
 
     pub fn from_protection(protection: Protection) -> Self
     {
-        use memory::vmm::Protection;
+        use vmm::Protection;
         // All kernel sections are global
         let mut flags = Self::GLOBAL;
         if !protection.contains(Protection::EXECUTABLE) {

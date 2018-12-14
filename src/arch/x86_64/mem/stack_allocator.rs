@@ -7,8 +7,8 @@
 // This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use memory::{PAGE_SIZE, FrameAllocate};
-use memory::paging::{self, Page, PageIter, ActivePageTable};
+use super::{PAGE_SIZE, FrameAllocate};
+use super::paging::{self, Page, PageIter, ActivePageTable};
 use core::ops::Drop;
 
 #[derive(Debug)]

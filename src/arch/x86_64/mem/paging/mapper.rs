@@ -10,7 +10,7 @@
 use super::{VirtualAddress, PhysicalAddress, Page, ENTRY_COUNT};
 use super::entry::*;
 use super::table::{self, Table, Level4};
-use memory::{PAGE_SIZE, Frame, FrameAllocate, FrameDeallocate};
+use arch::mem::{PAGE_SIZE, Frame, FrameAllocate, FrameDeallocate};
 use core::ptr::Unique;
 
 /// An interface to the active page table.

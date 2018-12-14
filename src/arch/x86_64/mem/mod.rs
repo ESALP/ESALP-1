@@ -9,6 +9,8 @@
 
 #![allow(dead_code,unused_variables)]
 
+// TODO FIX VISIBILITY ANNOTATIONS 
+
 use multiboot2::BootInformation;
 
 pub use self::stack_allocator::Stack;
@@ -19,7 +21,7 @@ use self::paging::PhysicalAddress;
 use self::paging::TemporaryPage;
 use self::paging::{ActivePageTable, InactivePageTable};
 use self::paging::{EntryFlags, Page};
-pub use self::vmm::*;
+use vmm::*;
 
 /// Allocator for stacks
 mod stack_allocator;
@@ -29,13 +31,18 @@ mod area_frame_allocator;
 mod frame_bitmap;
 /// Virtual paging module.
 mod paging;
-/// Virtual memory management
-mod vmm;
 
 /// The kernel is linked to `KERNEL_BASE + 1M`
-pub const KERNEL_BASE: usize = 0xFFFF_FFFF_8000_0000;
+const KERNEL_BASE: usize = 0xFFFF_FFFF_8000_0000;
 /// The size of a single page (or physical frame)
 pub const PAGE_SIZE: usize = 4096;
+
+// exports for the vmm
+/// The beginning of the kernel address space
+pub const KERNEL_SPACE_START: Vaddr = 0xffff_8000_0000_0000;
+/// The end of the kernel address space
+pub const KERNEL_SPACE_END: Vaddr = 0xffff_ffff_ffff_ffff;
+
 
 // TODO Replace this with a dynamic heap
 /// The begining of the kernel heap
@@ -43,8 +50,73 @@ const HEAP_START: usize = 0o000_001_000_0000;
 /// The size of the kernel heap
 const HEAP_SIZE: usize = 25 * PAGE_SIZE;
 
+/// Get the real value of a symbol
+macro_rules! symbol_val {
+    ($sym:expr) => {{
+        (&$sym as *const _ as usize)
+    }}
+}
+
+// different constants from the linker. We use this to create the early kernel regions
+extern {
+    static __code_start: Vaddr;
+    static __code_end: Vaddr;
+    static __bss_start: Vaddr;
+    static __bss_end: Vaddr;
+    static __data_start: Vaddr;
+    static __data_end: Vaddr;
+    static __rodata_start: Vaddr;
+    static __rodata_end: Vaddr;
+}
+
+// XXX no way to put this in a static?
+/// Each of the kernel's early memory regions
+fn early_regions() -> [Region; 6] {
+    unsafe { [
+        // kernel
+        Region {
+            name: "Code",
+            start: symbol_val!(__code_start),
+            end: symbol_val!(__code_end),
+            protection: Protection::EXECUTABLE,
+        },
+        Region {
+            name: "BSS",
+            start: symbol_val!(__bss_start),
+            end: symbol_val!(__bss_end),
+            protection: Protection::WRITABLE,
+        },
+        Region {
+            name: "Data",
+            start: symbol_val!(__data_start),
+            end: symbol_val!(__data_end),
+            protection: Protection::WRITABLE,
+        },
+        Region {
+            name: "RoData",
+            start: symbol_val!(__rodata_start),
+            end: symbol_val!(__rodata_end),
+            protection: Protection::NONE,
+        },
+        // heap
+        Region {
+            name: "Heap",
+            start: HEAP_START,
+            end: HEAP_START+HEAP_SIZE,
+            protection: Protection::WRITABLE,
+        },
+        // VGA buffer
+        Region {
+            name: "VGA",
+            start: 0xb8000,
+            end: 0xb8008,
+            protection: Protection::WRITABLE,
+        }
+    ]}
+}
+
 /// A struct that gives access to the physical and virtual memory managers.
-struct ArchSpecificVMM {
+pub struct ArchSpecificVMM {
     active_table:ActivePageTable,
     frame_allocator: FrameBitmap,
     stack_allocator: stack_allocator::StackAllocator,
@@ -53,7 +125,7 @@ struct ArchSpecificVMM {
 
 /// Map each region in `regions` to the higher half and return the old containing page of the `p4`
 /// table.
-fn map_regions_early<FA>(regions: &[Region], active_table: &mut ActivePageTable,
+pub fn map_regions_early<FA>(regions: &[Region], active_table: &mut ActivePageTable,
                    allocator: &mut FA, boot_info: &BootInformation) -> (Page, TemporaryPage)
         where FA: FrameAllocate
 {
@@ -117,7 +189,9 @@ fn region_range(region: Region) -> paging::PageIter
 /// It first finds, and prints out, the kernel start and finish. Then it
 /// remaps the kernel using correct permissions and finally allocates a
 /// space for and initializes the kernel heap
-fn arch_vmm_init_preheap(boot_info: &BootInformation, regions: &[Region]) -> ArchSpecificVMM {
+pub fn arch_vmm_init_preheap(boot_info: &BootInformation) -> ArchSpecificVMM {
+    let regions = early_regions();
+
     let memory_map_tag = boot_info.memory_map_tag()
         .expect("Memory map tag required");
     let elf_sections_tag = boot_info.elf_sections_tag()
@@ -154,7 +228,7 @@ fn arch_vmm_init_preheap(boot_info: &BootInformation, regions: &[Region]) -> Arc
                                 memory_map_tag.memory_areas());
 
     let (old_p4, tmp_page) =
-        map_regions_early(regions, &mut active_table, &mut frame_allocator, boot_info);
+        map_regions_early(&regions, &mut active_table, &mut frame_allocator, boot_info);
 
     unsafe {
         ::hole_list_allocator::init(HEAP_START, HEAP_SIZE);
@@ -180,13 +254,16 @@ fn arch_vmm_init_preheap(boot_info: &BootInformation, regions: &[Region]) -> Arc
     }
 }
 
-fn arch_vmm_init(vmm: &mut VMM) {
+pub fn arch_vmm_init(vmm: &mut VMM) {
+    for &region in early_regions().iter() {
+        vmm.insert(region);
+    }
     let region = vmm.arch_specific.frame_allocator.vm_region();
     vmm.insert(region);
 }
 
-use self::vmm::VmmError;
-fn arch_map_to(arch_specific: &mut ArchSpecificVMM, region: Region, start_address: usize)
+use vmm::VmmError;
+pub fn arch_map_to(arch_specific: &mut ArchSpecificVMM, region: Region, start_address: usize)
     -> Result<(),VmmError>
 {
     let &mut ArchSpecificVMM {
@@ -194,11 +271,13 @@ fn arch_map_to(arch_specific: &mut ArchSpecificVMM, region: Region, start_addres
         ref mut frame_allocator,
         ref mut stack_allocator,
     } = arch_specific;
-    let flags = EntryFlags::from_protection(region.protection);
-    if !region_range(region)
-            .all(|page| active_table.is_allocated(page)) {
+
+    if region_range(region)
+            .any(|page| active_table.is_allocated(page)) {
         return Err(VmmError::MemUsed);
     }
+
+    let flags = EntryFlags::from_protection(region.protection);
 
     for page in region_range(region) {
         let frame_start = start_address + (page.start_address() - region.start);
@@ -207,7 +286,7 @@ fn arch_map_to(arch_specific: &mut ArchSpecificVMM, region: Region, start_addres
     }
     Ok(())
 }
-fn arch_map(arch_specific: &mut ArchSpecificVMM, region: Region)
+pub fn arch_map(arch_specific: &mut ArchSpecificVMM, region: Region)
     -> Result<(),VmmError>
 {
     let &mut ArchSpecificVMM {
@@ -216,8 +295,8 @@ fn arch_map(arch_specific: &mut ArchSpecificVMM, region: Region)
         ref mut stack_allocator,
     } = arch_specific;
     let flags = EntryFlags::from_protection(region.protection);
-    if !region_range(region)
-            .all(|page| active_table.is_allocated(page)) {
+    if region_range(region)
+            .any(|page| active_table.is_allocated(page)) {
         return Err(VmmError::MemUsed);
     }
 
@@ -227,8 +306,8 @@ fn arch_map(arch_specific: &mut ArchSpecificVMM, region: Region)
     Ok(())
 }
 
-fn arch_unmap(arch_specific: &mut ArchSpecificVMM, region: Region)
-    -> Result<(), VmmError>
+// XXX perhaps add an error path?
+pub fn arch_unmap(arch_specific: &mut ArchSpecificVMM, region: Region)
 {
     let &mut ArchSpecificVMM {
         ref mut active_table,
@@ -238,10 +317,10 @@ fn arch_unmap(arch_specific: &mut ArchSpecificVMM, region: Region)
     for page in region_range(region) {
         active_table.unmap(page, frame_allocator);
     }
-    Ok(())
 }
 
-fn arch_alloc_stack(arch_specific: &mut ArchSpecificVMM, size: usize)
+// TODO remove
+pub fn arch_alloc_stack(arch_specific: &mut ArchSpecificVMM, size: usize)
     -> Result<Stack, &'static str>
 {
     let &mut ArchSpecificVMM {

@@ -10,16 +10,16 @@
 use core::ops::{Deref, DerefMut};
 use core::ops::Add;
 
-use multiboot2::{BootInformation, StringTable};
+//use multiboot2::{BootInformation, StringTable};
 use spin::Mutex;
 
 pub use self::entry::*;
 pub use self::mapper::Mapper;
 pub use self::temporary_page::{TemporaryPage, TinyAllocator};
-use memory::{PAGE_SIZE, Frame, FrameAllocate};
+use super::{PAGE_SIZE, Frame, FrameAllocate};
 //use memory::{MemoryController, MEMORY_CONTROLLER};
 
-use memory::frame_bitmap::FrameBitmap;
+use super::frame_bitmap::FrameBitmap;
 
 /// An entry in the page table.
 mod entry;

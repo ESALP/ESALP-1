@@ -42,16 +42,18 @@ extern crate hole_list_allocator;
 /// Higher-level data structures that use the heap
 extern crate alloc;
 
-#[macro_use]
 /// Abstraction of the VGA text buffer
+#[macro_use]
 mod vga_buffer;
+#[macro_use]
+mod cpuio;
+/// Arch specific code
+mod arch;
 /// Memory management
-mod memory;
+mod vmm;
 /// Interrupts code
 mod interrupts;
 /// IO abstractions in Rust
-#[macro_use]
-mod cpuio;
 mod sync;
 mod scheduler;
 /// Utilities for multi-CPU processing
@@ -77,29 +79,42 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) -> ! {
 
     let boot_info = unsafe { multiboot2::load(multiboot_info_address) };
 
-    for module in boot_info.module_tags() {
-        if module.name() == "keyboard" {
-            let addr = module.start_address() as usize + memory::KERNEL_BASE;
-            unsafe {
-                interrupts::KEYBOARD.lock()
-                    .change_kbmap(&*(addr as *const [u8; 128]));
-            }
-        }
-    }
 
     // Initialize memory
-    memory::vm_init(&boot_info);
+    vmm::vm_init(&boot_info);
 
     // Initialize CPU local variables and the scheduler
     unsafe {
         smp::CpuLocal::init()
     };
 
+
+    // before we start up interrupts, lets get the keyboard set up
+    for module in boot_info.module_tags() {
+        if module.name() == "keyboard" {
+            // TODO remove hacky pub
+            let addr = module.start_address() as usize;
+
+            // Identity map
+            let region = vmm::Region::new("Keyboard Region",
+                addr, addr + vmm::PAGE_SIZE, vmm::Protection::empty());
+            if let Err(e) = vmm::map_to(region, addr) {
+                panic!("Could not map keyboard module: {:?}", e);
+            }
+            unsafe {
+                interrupts::KEYBOARD.lock()
+                    .change_kbmap(&*(addr as *const [u8; 128]));
+            }
+            vmm::unmap(addr);
+        }
+    }
+
     // Initialize the IDT
     interrupts::init();
 
     // Initialize the serial port
     cpuio::init();
+
 
     println!("Try to write some things!");
     vga_buffer::change_color(vga_buffer::Color::White, vga_buffer::Color::Black);
@@ -126,7 +141,7 @@ fn shutdown() -> ! {
 
 #[cfg(feature = "test")]
 fn run_tests() {
-    memory::tests::run();
+    vmm::tests::run();
     scheduler::tests::run();
     smp::tests::run();
     interrupts::tests::run();

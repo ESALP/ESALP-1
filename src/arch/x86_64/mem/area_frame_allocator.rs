@@ -8,9 +8,9 @@
 // except according to those terms.
 
 use multiboot2::BootInformation;
-
-use memory::{Frame, FrameAllocate, KERNEL_BASE};
 use multiboot2::{MemoryAreaIter, MemoryArea};
+
+use super::{Frame, FrameAllocate, KERNEL_BASE};
 
 /// An iterator acrossed physical frames using memory areas.
 pub struct AreaFrameAllocator<'a> {

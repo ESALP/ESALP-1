@@ -10,13 +10,13 @@
 use core::ptr::Unique;
 use core::mem::size_of;
 
-use memory::{Frame, FrameAllocate, FrameDeallocate};
-use memory::paging::{self, Page, VirtualAddress};
-use memory::paging::ActivePageTable;
-use memory::vmm::{Region, Protection};
+use super::{Frame, FrameAllocate, FrameDeallocate};
+use super::paging::{self, Page, VirtualAddress};
+use super::paging::ActivePageTable;
+use vmm::{Region, Protection};
 
 use rlibc;
-use memory::PAGE_SIZE;
+use super::PAGE_SIZE;
 
 type BitmapEntry = usize;
 const EMPTY_ENTRY: BitmapEntry = 0;

@@ -7,97 +7,35 @@
 // This file may not be copied, modified, or distributed
 // except according to those terms.
 
+// TODO remove
+#![allow(dead_code,unused_variables)]
+
 use multiboot2::BootInformation;
 use spin::Mutex;
 
 use core::mem::MaybeUninit;
 use alloc::collections::linked_list::LinkedList;
 
-use memory::ArchSpecificVMM;
-use memory::{arch_vmm_init_preheap, arch_vmm_init};
-use memory::{arch_map_to, arch_map, arch_unmap};
-use memory::arch_alloc_stack;
-use memory::{HEAP_START, HEAP_SIZE};
-use memory::Stack;
+use arch::mem::ArchSpecificVMM;
+pub use arch::mem::{KERNEL_SPACE_START, KERNEL_SPACE_END};
+pub use arch::mem::PAGE_SIZE;
+use arch::mem::{arch_vmm_init_preheap, arch_vmm_init};
+use arch::mem::{arch_map_to, arch_map, arch_unmap};
+use arch::mem::arch_alloc_stack;
+pub use arch::mem::Stack;
 
 // TODO export from arch
-type vaddr = usize;
-type paddr = usize;
+pub type Vaddr = usize;
+pub type Paddr = usize;
 
-// Entire higher half
-const KERNEL_SPACE_START: vaddr = 0xffff_8000_0000_0000;
-const KERNEL_SPACE_END: vaddr = 0xffff_ffff_ffff_ffff;
-
+/// The only current VMM
 static KERNEL_VMM: Mutex<MaybeUninit<VMM>> = Mutex::new(MaybeUninit::uninitialized());
-
-extern {
-    static __code_start: vaddr;
-    static __code_end: vaddr;
-    static __bss_start: vaddr;
-    static __bss_end: vaddr;
-    static __data_start: vaddr;
-    static __data_end: vaddr;
-    static __rodata_start: vaddr;
-    static __rodata_end: vaddr;
-}
-
-/// Get the real value of a symbol
-macro_rules! symbol_val {
-    ($sym:expr) => {{
-        (&$sym as *const _ as usize)
-    }}
-}
-
-// Perhaps move to arch
-pub(super) fn early_regions() -> [Region; 6] {
-    unsafe { [
-        // kernel
-        Region {
-            name: "Code",
-            start: symbol_val!(__code_start),
-            end: symbol_val!(__code_end),
-            protection: Protection::EXECUTABLE,
-        },
-        Region {
-            name: "BSS",
-            start: symbol_val!(__bss_start),
-            end: symbol_val!(__bss_end),
-            protection: Protection::WRITABLE,
-        },
-        Region {
-            name: "Data",
-            start: symbol_val!(__data_start),
-            end: symbol_val!(__data_end),
-            protection: Protection::WRITABLE,
-        },
-        Region {
-            name: "RoData",
-            start: symbol_val!(__rodata_start),
-            end: symbol_val!(__rodata_end),
-            protection: Protection::NONE,
-        },
-        // heap
-        Region {
-            name: "Heap",
-            start: HEAP_START,
-            end: HEAP_START+HEAP_SIZE,
-            protection: Protection::WRITABLE,
-        },
-        // VGA buffer
-        Region {
-            name: "VGA",
-            start: 0xb8000,
-            end: 0xb8008,
-            protection: Protection::WRITABLE,
-        }
-    ]}
-}
 
 /// Initialize virtual memory
 pub fn vm_init(boot_info: &BootInformation) {
     assert_has_not_been_called!("vmm::vm_init must only be called once!");
 
-    let arch_specific = arch_vmm_init_preheap(boot_info, &early_regions());
+    let arch_specific = arch_vmm_init_preheap(boot_info);
     // heap works at this point
     let mut vmm = VMM {
         start: KERNEL_SPACE_START,
@@ -105,17 +43,14 @@ pub fn vm_init(boot_info: &BootInformation) {
         arch_specific: arch_specific,
         end: KERNEL_SPACE_END,
     };
-    //add basic regions
-    for region in early_regions().iter() {
-        println!("region: {:x?}", region);
-        assert!(vmm.insert(*region));
-    }
     //add arch specific regions
     arch_vmm_init(&mut vmm);
 
     KERNEL_VMM.lock().set(vmm);
 }
 
+/// Errors which can occur when mapping or unmapping memory
+#[derive(Debug)]
 pub enum VmmError {
     MemUsed,
     PhysMemUsed,
@@ -123,7 +58,7 @@ pub enum VmmError {
 }
 
 /// Map `region` to the paddr `start_address` or return an error
-pub fn map_to(region: Region, start_address: paddr) -> Result<(),VmmError> {
+pub fn map_to(region: Region, start_address: Paddr) -> Result<(),VmmError> {
     let mut vmm_lock = KERNEL_VMM.lock();
     let vmm = unsafe { vmm_lock.get_mut() };
     if !vmm.insert(region) {
@@ -154,7 +89,7 @@ pub fn map(region: Region) -> Result<(),VmmError> {
 /// Unmap the region associated with `addr`
 /// Returns `true` iff a region was unmapped
 // TODO make it posssible to unmap a region
-pub fn unmap(addr: vaddr) -> bool {
+pub fn unmap(addr: Vaddr) -> bool {
     let mut vmm_lock = KERNEL_VMM.lock();
     let vmm = unsafe { vmm_lock.get_mut() };
 
@@ -177,12 +112,11 @@ pub fn alloc_stack(size: usize) -> Result<Stack, &'static str> {
 }
 
 pub struct VMM {
-    start: vaddr,
+    start: Vaddr,
     regions: LinkedList<Region>,
-    //table: InactivePageTable,
-    // TODO make pub(arch mem)
-    pub(super) arch_specific: ArchSpecificVMM,
-    end: vaddr,
+    // TODO fix visability annotations
+    pub arch_specific: ArchSpecificVMM,
+    end: Vaddr,
 }
 
 impl VMM {
@@ -210,7 +144,7 @@ impl VMM {
     }
 
    /// Returns the region that contains `address`, if it exits
-   pub fn containing_region(&self, address: vaddr) -> Option<Region> {
+   pub fn containing_region(&self, address: Vaddr) -> Option<Region> {
        self.regions.iter().filter(|region| region.contains(address))
            // should contain /at most/ one region
            .next().cloned()
@@ -228,10 +162,10 @@ impl VMM {
 #[derive(Clone,Copy)]
 #[derive(Debug)]
 pub struct Region {
-    name: &'static str,
-    pub start: vaddr,
-    pub end: vaddr,
-    pub(super) protection: Protection,
+    pub name: &'static str,
+    pub start: Vaddr,
+    pub end: Vaddr,
+    pub protection: Protection,
 }
 
 bitflags! {
@@ -253,7 +187,7 @@ enum RegionOrder {
 }
 
 impl Region {
-    pub fn new(name: &'static str, start: vaddr, end: vaddr, protection: Protection) -> Region {
+    pub fn new(name: &'static str, start: Vaddr, end: Vaddr, protection: Protection) -> Region {
         Region {
             name: name,
             start: start,
@@ -262,7 +196,7 @@ impl Region {
         }
     }
 
-    fn contains(&self, addr: vaddr) -> bool {
+    fn contains(&self, addr: Vaddr) -> bool {
         addr >= self.start && addr <= self.end
     }
 
@@ -284,4 +218,32 @@ impl Region {
     // TODO unmap
     //fn difference(self, other: &Self) -> Option<(Region,Option<Region>)> {
     //}
+}
+
+#[cfg(feature = "test")]
+pub mod tests {
+    use tap::TestGroup;
+    use super::{Region, map, unmap, Vaddr, Protection};
+
+    pub fn run() {
+        let mut tap = TestGroup::new(3);
+
+        tap.diagnostic("Testing vmm");
+        // Test map_to
+
+        // random address (chosen by fair dice roll)
+        let addr: Vaddr = 0x100000;
+        let region = Region::new("Test region", addr, addr + (5 * super::PAGE_SIZE),
+            Protection::WRITABLE);
+        tap.assert_tap(map(region).is_ok(),
+            "Could not map region");
+        unsafe {
+            let a = addr as *mut usize;
+            *a = 0;
+            tap.assert_tap(*a == 0, "Could not read from mapped region");
+        }
+        // Test unmap
+
+        tap.assert_tap(unmap(addr), "Could not unmap new region");
+    }
 }

@@ -14,10 +14,10 @@
 // the p4 table itself, we cannot gurentee that any of
 // these addresses are valid.
 
-use memory::paging::entry::*;
-use memory::paging::ENTRY_COUNT;
-use memory::paging::VirtualAddress;
-use memory::FrameAllocate;
+use super::entry::*;
+use super::ENTRY_COUNT;
+use super::VirtualAddress;
+use arch::mem::FrameAllocate;
 
 use core::marker::PhantomData;
 use core::ops::{Index, IndexMut};

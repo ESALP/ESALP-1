@@ -67,7 +67,7 @@ use self::gdt::Gdt;
 use sync::IrqLock;
 use scheduler;
 
-use memory;
+use vmm;
 
 use self::pic::ChainedPICs;
 pub use self::keyboard::KEYBOARD;
@@ -127,14 +127,14 @@ pub fn init() {
     let tss = TSS.call_once(|| {
         let mut tss = TaskStateSegment::new();
 
-        let double_fault_stack = memory::alloc_stack(1)
+        let double_fault_stack = vmm::alloc_stack(1)
             .expect("Could not allocate double fault stack");
 
         tss.interrupt_stack_table[DF_TSS_INDEX as usize] =
             VirtualAddress(double_fault_stack.top());
 
         #[cfg(feature = "test")] {
-            let test_stack = memory::alloc_stack(1)
+            let test_stack = vmm::alloc_stack(1)
                 .expect("Could not allocate test stack");
             tss.interrupt_stack_table[TEST_TSS_INDEX as usize] =
                 VirtualAddress(test_stack.top());
