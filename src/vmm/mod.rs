@@ -65,7 +65,7 @@ pub fn map_to(region: Region, start_address: Paddr) -> Result<(),VmmError> {
         return Err(VmmError::MemUsed);
     }
     if let Err(E) = arch_map_to(&mut vmm.arch_specific, region, start_address) {
-        vmm.remove_region(region.start);
+        vmm.remove_region(region);
         return Err(E)
     }
     Ok(())
@@ -80,7 +80,7 @@ pub fn map(region: Region) -> Result<(),VmmError> {
         return Err(VmmError::MemUsed);
     }
     if let Err(E) = arch_map(&mut vmm.arch_specific, region) {
-        vmm.remove_region(region.start);
+        vmm.remove_region(region);
         return Err(E)
     }
     Ok(())
@@ -88,12 +88,11 @@ pub fn map(region: Region) -> Result<(),VmmError> {
 
 /// Unmap the region associated with `addr`
 /// Returns `true` iff a region was unmapped
-// TODO make it posssible to unmap a region
-pub fn unmap(addr: Vaddr) -> bool {
+pub fn unmap(region: Region) -> bool {
     let mut vmm_lock = KERNEL_VMM.lock();
     let vmm = unsafe { vmm_lock.get_mut() };
 
-    if let Some(region) = vmm.remove_region(addr) {
+    if vmm.remove_region(region) {
         arch_unmap(&mut vmm.arch_specific, region);
         true
     } else {
@@ -150,12 +149,36 @@ impl VMM {
            .next().cloned()
    }
 
-   /// Remove the region intersecting with `address`
-   pub fn remove_region(&mut self, address: usize) -> Option<Region>
+   /// Remove the region `region`
+   ///
+   /// returns true if anything was removed
+   pub fn remove_region(&mut self, to_remove: Region) -> bool
    {
-       self.regions.drain_filter(|region| region.contains(address))
-           // should contain /at most/ one region
-           .next()
+       // TODO work on linked list cursors to make doing this possible
+       // without a collect
+       use alloc::vec::Vec;
+       let intersecting: Vec<_> = self.regions
+           .drain_filter(|region| region.intersects(&to_remove))
+           .collect();
+
+       if intersecting.is_empty() {
+           return false;
+       }
+
+       for region in intersecting {
+           match region.difference(&to_remove) {
+               Some((r1, Some(r2))) => {
+                   self.insert(r1);
+                   self.insert(r2);
+               },
+               Some((r, None)) => {
+                   self.insert(r);
+               },
+               None => (),
+           }
+       }
+
+       true
    }
 }
 
@@ -215,9 +238,31 @@ impl Region {
         }
     }
 
-    // TODO unmap
-    //fn difference(self, other: &Self) -> Option<(Region,Option<Region>)> {
-    //}
+    fn difference(mut self, other: &Self) -> Option<(Region,Option<Region>)> {
+        use core::cmp;
+
+        /* |---self---<-- other -->---self---| */
+        if self.start < other.start && self.end < other.end {
+            let mut last = self.clone();
+            self.end = other.start;
+            last.start = other.end;
+            Some((self,Some(last)))
+        }
+        /* |---self---<-- other --> */
+        else if self.start < other.start {
+            self.end = cmp::min(self.end, other.start);
+            Some((self,None))
+        }
+        /* <-- other -->---self---| */
+        else if self.end > other.end {
+            self.start = cmp::max(self.start, other.end);
+            Some((self,None))
+        }
+        /* <--other---|---self---|---other--> */
+        else {
+            None
+        }
+    }
 }
 
 #[cfg(feature = "test")]
@@ -244,6 +289,6 @@ pub mod tests {
         }
         // Test unmap
 
-        tap.assert_tap(unmap(addr), "Could not unmap new region");
+        tap.assert_tap(unmap(region), "Could not unmap new region");
     }
 }

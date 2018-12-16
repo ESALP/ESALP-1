@@ -105,7 +105,7 @@ pub extern "C" fn rust_main(multiboot_info_address: usize) -> ! {
                 interrupts::KEYBOARD.lock()
                     .change_kbmap(&*(addr as *const [u8; 128]));
             }
-            vmm::unmap(addr);
+            vmm::unmap(region);
         }
     }
 
